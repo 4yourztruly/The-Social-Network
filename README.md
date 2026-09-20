@@ -1,4 +1,6 @@
-# Football Social Life Sim
+# The Social Network
+
+**[Play it here](https://4yourztruly.github.io/The-Social-Network/)**
 
 A web-based social-media life sim: you play a professional footballer with a
 Twitter/X-style profile, living inside a feed of NPCs (teammates, fans,
@@ -39,21 +41,29 @@ Building milestone by milestone per the spec (section 14). Current state:
       feed with seeded NPC posts, follow/unfollow, IndexedDB persistence,
       save export/import, PWA manifest + service worker, light/dark/system
       theme.
-- [x] **Milestone 2 — Composer and comments:** structured composer (post
-      type, tone, keyword tagger), GameEvent creation, reaction engine v1
-      (deterministic, seeded-RNG, unit-tested), template pools with
-      anti-repetition, staggered comments via a scheduler tick, likes/reposts/
-      follower growth from one deterministic engagement formula, post
-      threads with player replies, outcome banner with stat deltas.
-- [ ] Milestone 3 — Game clock, scheduler, stories, media personas
-- [ ] Milestone 4 — DMs
-- [ ] Milestone 5 — Event scenes
-- [ ] Milestone 6 — AI layer (bring-your-own free-tier key)
-- [ ] Milestone 7 — Polish, perf pass, tests, deploy docs
+- [x] **Milestone 2 — Composer and comments:** structured composer, keyword
+      tagger, deterministic seeded-RNG reaction engine, template pools with
+      anti-repetition, staggered comments, likes/reposts/follower growth,
+      post threads with player replies, outcome banner with stat deltas.
+- [x] **Milestone 3 — Game clock, scheduler, stories, media personas:**
+      stories row with 24h expiry, a scheduler tick, media personas
+      (tabloid/insider/match reporter) that can leak coverage of risky
+      activities and events.
+- [x] **Milestone 4 — DMs:** inbox, deterministic + AI-backed replies,
+      typing indicator, relationship effects.
+- [x] **Milestone 5 — Event scenes:** player-authored Activities (a scene
+      with one or more people you follow, choices, an AI-narrated or
+      templated outcome) and the Event button (a quick random encounter
+      with variable outcomes).
+- [x] **Milestone 6 — AI layer:** bring-your-own free-tier key (Settings),
+      client-side budget limiter, AI-backed DM replies, post comments,
+      Activity narration and media coverage — every AI path has a
+      deterministic template fallback, so the game is always fully
+      playable with AI off.
+- [ ] Milestone 7 — Polish, perf pass, deploy docs
 
-AI is not implemented yet. When it lands, only providers with a genuine
-free tier will ever be offered — no billing, no credit card, no paid
-usage. See spec section 8 for the full policy.
+Only providers with a genuine free tier are ever offered — no billing, no
+credit card, no paid usage. See spec section 8 for the full policy.
 
 ## Save data
 
