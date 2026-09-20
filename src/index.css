@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-white);
+}
+
+.dark body {
+  background-color: var(--color-neutral-950);
+}
+
+/* On desktop the app renders as a centered card (see App.tsx's md:border-x)
+   with room on either side — give that margin a faint page background so
+   the card reads as a card instead of just floating on identical white. On
+   mobile the card already fills the viewport, so this is never visible. */
+@media (min-width: 768px) {
+  body {
+    background-color: var(--color-neutral-100);
+  }
+  .dark body {
+    background-color: var(--color-neutral-950);
+  }
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Tailwind's Preflight deliberately doesn't reset button cursor to pointer
+   (removed in v3+), so every <button> shows the arrow cursor by default —
+   invisible on a phone, but reads as "not clickable" with a mouse on
+   desktop. This is the single global fix instead of patching every button
+   individually. */
+button:not(:disabled) {
+  cursor: pointer;
+}
