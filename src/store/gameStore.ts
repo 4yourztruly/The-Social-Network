@@ -30,6 +30,9 @@ import {
 import { inferPersonaFromBio } from '../engine/personaInference'
 import { isDmAvailable, isFollowable, isViewableProfile, tierForPersona } from '../engine/npcTier'
 import { CAREER_PACKS } from '../content/careers'
+import type { NPCSeed } from '../content/careers/types'
+import { buildFallbackRoster } from '../content/rosterFallback'
+import { generateRoster } from '../ai/rosterService'
 import { isNPC } from '../types'
 import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
@@ -72,7 +75,7 @@ import { generateAiDmReply } from '../ai/dmService'
 import { generateAiComment } from '../ai/commentService'
 import { generateActivityTurn, generateMediaCoverage } from '../ai/activityService'
 import { generateAiEncounter, generateAiEncounterOutcome } from '../ai/eventService'
-import { getProviderConfig } from '../ai/keyStorage'
+import { getProviderConfig, loadProviderConfigs } from '../ai/keyStorage'
 import { canSpend, recordSpend } from '../ai/budget'
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000
@@ -135,7 +138,7 @@ export interface GameState {
   onboarded: boolean
 
   // onboarding
-  completeOnboarding: (input: OnboardingInput) => void
+  completeOnboarding: (input: OnboardingInput) => Promise<void>
 
   // world actions
   followNpc: (npcId: string) => void
@@ -200,9 +203,9 @@ export interface CreateActivityInput {
   plannedLabel: string
 }
 
-function buildInitialState(input: OnboardingInput) {
+function buildInitialState(input: OnboardingInput, npcSeeds?: NPCSeed[]) {
   const pack = CAREER_PACKS[input.career]
-  const world = createSeededWorld(pack, input)
+  const world = createSeededWorld(pack, input, Date.now(), npcSeeds)
   // Start the player following the org's own teammates + coach/mentor by default.
   for (const profile of Object.values(world.profiles)) {
     if (isNPC(profile) && (profile.persona === 'teammate' || profile.persona === 'coach')) {
@@ -628,8 +631,33 @@ export const useGameStore = create<GameState>((set, get) => {
   activeEncounter: null,
   onboarded: false,
 
-  completeOnboarding: (input) => {
-    const world = buildInitialState(input)
+  completeOnboarding: async (input) => {
+    const pack = CAREER_PACKS[input.career]
+    // Provider keys persist independently of the per-game `settings` state
+    // (which is about to get reset below anyway) — a returning player who
+    // configured AI in a previous playthrough shouldn't lose it just because
+    // they're starting a new one. A brand-new player has no configured
+    // provider yet at this point (Settings is only reachable after
+    // onboarding), so they always get the curated fallback roster — that's
+    // expected, not a bug.
+    const configs = loadProviderConfigs()
+    const config = configs[0]
+    const aiEligible = !!config && canSpend(config.id, config.rpdBudget)
+
+    let npcSeeds: NPCSeed[] | undefined
+    if (aiEligible) {
+      const generated = await generateRoster({ input, pack, config })
+      if (generated) {
+        recordSpend(config.id)
+        npcSeeds = generated
+      }
+    }
+    if (!npcSeeds) {
+      const rng = mulberry32(hashStringToSeed(`${input.username}_roster`))
+      npcSeeds = buildFallbackRoster(pack, input, rng)
+    }
+
+    const world = buildInitialState(input, npcSeeds)
     set({
       ...world,
       clock: Date.now(),

@@ -8,6 +8,7 @@ export function Onboarding() {
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const career = useMemo(() => inferCareerFromBio(bio), [bio])
   const pack = CAREER_PACKS[career]
@@ -17,18 +18,25 @@ export function Onboarding() {
   const org = useMemo(() => extractOrgFromBio(bio), [bio])
   const hasSignal = bio.trim().length >= 6
 
-  const canSubmit = displayName.trim().length > 0 && username.trim().length > 0 && bio.trim().length > 0
+  const canSubmit = displayName.trim().length > 0 && username.trim().length > 0 && bio.trim().length > 0 && !submitting
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return
-    completeOnboarding({
-      career,
-      displayName: displayName.trim(),
-      username: username.trim().replace(/^@/, '').replace(/\s+/g, ''),
-      bio: bio.trim(),
-      role: role ?? '',
-      org: org ?? '',
-    })
+    setSubmitting(true)
+    try {
+      await completeOnboarding({
+        career,
+        displayName: displayName.trim(),
+        username: username.trim().replace(/^@/, '').replace(/\s+/g, ''),
+        bio: bio.trim(),
+        role: role ?? '',
+        org: org ?? '',
+      })
+    } finally {
+      // Only matters if completeOnboarding throws — on success this screen
+      // unmounts before the reset would ever be seen.
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -104,7 +112,7 @@ export function Onboarding() {
             disabled={!canSubmit}
             className="mt-2 rounded-full bg-neutral-900 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40 dark:bg-white dark:text-neutral-900"
           >
-            Enter the feed
+            {submitting ? 'Building your world…' : 'Enter the feed'}
           </button>
         </div>
       </div>

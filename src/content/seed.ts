@@ -1,5 +1,5 @@
 import type { CareerType, NPC, PlayerState, Post, Profile, RelationshipVibe, Settings, WorldSettings } from '../types'
-import type { CareerPack } from './careers/types'
+import type { CareerPack, NPCSeed } from './careers/types'
 import { fillTemplate } from '../engine/templates/filler'
 import { mulberry32, pick, randomInt, type RNG } from '../engine/rng'
 import { makeId } from '../engine/id'
@@ -74,9 +74,9 @@ export function defaultVibeForPersona(persona: NPC['persona']): RelationshipVibe
 // org if they named one, otherwise the pack's fictional default. This is
 // never written onto the player's own record; it only keeps the supporting
 // cast's bios and posts grammatical when the player didn't specify a club.
-function createNpcProfiles(pack: CareerPack, rng: RNG, orgForFlavor: string): Record<string, NPC> {
+function createNpcProfiles(npcSeeds: NPCSeed[], pack: CareerPack, rng: RNG, orgForFlavor: string): Record<string, NPC> {
   const npcs: Record<string, NPC> = {}
-  for (const seed of pack.npcs) {
+  for (const seed of npcSeeds) {
     npcs[seed.id] = {
       id: seed.id,
       username: seed.username,
@@ -326,10 +326,15 @@ export interface SeededWorld {
   postOrder: string[]
 }
 
-export function createSeededWorld(pack: CareerPack, input: OnboardingInput, seed = Date.now()): SeededWorld {
+export function createSeededWorld(
+  pack: CareerPack,
+  input: OnboardingInput,
+  seed = Date.now(),
+  npcSeeds: NPCSeed[] = pack.npcs,
+): SeededWorld {
   const rng = mulberry32(seed)
   const orgForFlavor = input.org || pack.worldName
-  const npcs = createNpcProfiles(pack, rng, orgForFlavor)
+  const npcs = createNpcProfiles(npcSeeds, pack, rng, orgForFlavor)
   const playerProfile = createPlayerProfile(pack, input)
   const posts = seedPosts(pack, rng, npcs, 45, orgForFlavor)
   const stories = seedStories(pack, rng, npcs, 6, orgForFlavor)
