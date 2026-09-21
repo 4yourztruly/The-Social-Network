@@ -28,10 +28,14 @@ export function AddStory({ onBack, onPosted }: AddStoryProps) {
     <div className="fixed inset-0 z-[100] flex justify-center bg-black">
       <div
         className="relative flex h-full w-full max-w-xl flex-col text-white"
-        style={{ background: gradientCssFor(`story_draft_${player.id}`) }}
+        style={{
+          background: gradientCssFor(`story_draft_${player.id}`),
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
       >
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={onBack} className="rounded-full p-1.5 hover:bg-white/10">
+          <button onClick={onBack} className="rounded-full p-2.5 hover:bg-white/10">
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
           <Avatar avatar={player.avatar} seed={player.id} size={28} />

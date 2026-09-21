@@ -86,7 +86,14 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
 
   return (
     <div className="fixed inset-0 z-[100] flex justify-center bg-black">
-      <div className="relative flex h-full w-full max-w-xl flex-col text-white" style={{ background: gradientCssFor(story.id) }}>
+      <div
+        className="relative flex h-full w-full max-w-xl flex-col text-white"
+        style={{
+          background: gradientCssFor(story.id),
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
         <div className="flex gap-1 px-3 pt-3">
           {stories.map((s, i) => (
             <div key={s.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/30">
@@ -112,7 +119,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
             {author.verified && <VerifiedBadge />}
           </span>
           <span className="text-xs text-white/70">{formatRelativeTime(story.createdAt)}</span>
-          <button onClick={onClose} className="ml-auto rounded-full p-1.5 text-xl leading-none hover:bg-white/10">
+          <button onClick={onClose} className="ml-auto rounded-full p-2.5 text-xl leading-none hover:bg-white/10">
             ×
           </button>
         </div>

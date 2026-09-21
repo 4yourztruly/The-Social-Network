@@ -24,7 +24,7 @@ export function EventButton() {
   if (activeEncounter) return null
 
   return (
-    <div className="absolute bottom-20 right-4 z-40 md:bottom-6">
+    <div className="absolute right-4 z-40 bottom-[calc(5rem_+_env(safe-area-inset-bottom))] md:bottom-6">
       {cooldownMessage && (
         <p className="mb-2 whitespace-nowrap rounded-full bg-neutral-900 px-3 py-1 text-xs text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900">
           {cooldownMessage}

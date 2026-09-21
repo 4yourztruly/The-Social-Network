@@ -16,9 +16,21 @@ body,
   height: 100%;
 }
 
+html {
+  /* Stops mobile browsers auto-inflating text size in landscape/columns,
+     which otherwise fights with our own responsive type scale. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background-color: var(--color-white);
+  /* All real scrolling happens inside individual `overflow-y-auto` panes
+     (see e.g. Feed, Profile, DMThread). Without this, the outer page can
+     also rubber-band/pull-to-refresh on mobile, which reads as the whole
+     app "scrolling weird" on top of whatever pane is actually scrolling. */
+  overscroll-behavior: none;
 }
 
 .dark body {
@@ -49,4 +61,25 @@ body {
    individually. */
 button:not(:disabled) {
   cursor: pointer;
+}
+
+/* Removes the ~300ms tap delay and the double-tap-to-zoom ambiguity on
+   every button/link — without this, fast repeated taps (nav switching,
+   picking a choice) can register as a zoom gesture instead of a click. */
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* iOS Safari zooms the whole page in on focus whenever a form control's
+   computed font-size is under 16px — true of every text-sm/text-xs input
+   and textarea in this app. Forcing 16px only below the `md` breakpoint
+   (where this actually happens) fixes the zoom without changing how any
+   of them look on desktop. */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }

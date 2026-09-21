@@ -126,9 +126,10 @@ export default function App() {
 
       <div
         className="relative flex h-full min-w-0 flex-1 flex-col bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         {postOutcome && (
-          <div className="absolute inset-x-0 top-0 z-50">
+          <div className="absolute inset-x-0 z-50" style={{ top: 'env(safe-area-inset-top)' }}>
             <OutcomeBanner outcome={postOutcome} onDismiss={() => setPostOutcome(null)} />
           </div>
         )}
@@ -164,7 +165,7 @@ export default function App() {
                     <button
                       onClick={() => setShowPeople(true)}
                       aria-label="People"
-                      className="cursor-pointer rounded-full p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      className="cursor-pointer rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                     >
                       <PeopleIcon className="h-5 w-5" />
                     </button>
