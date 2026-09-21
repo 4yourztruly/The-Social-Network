@@ -111,35 +111,34 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
                 onOpenProfile={onOpenProfile}
                 className="mt-3 whitespace-pre-wrap break-words text-xl leading-snug text-neutral-900 dark:text-neutral-100"
               />
-
               <p className="mt-3 text-sm text-neutral-500">{formatFullTime(post.createdAt)}</p>
-
-              <div className="mt-3 flex items-center gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
-                <button
-                  onClick={focusReplyInput}
-                  className="flex cursor-pointer items-center gap-1.5 rounded-full bg-sky-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-sky-600"
-                >
-                  <ReplyIcon className="h-4 w-4" />
-                  Reply
-                </button>
-                <span className="flex items-center gap-1.5 rounded-full border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
-                  <RepostIcon className="h-4 w-4" />
-                  {post.reposts}
-                </span>
-                <button
-                  onClick={handleLike}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                    post.likedByPlayer
-                      ? 'border-rose-300 text-rose-500'
-                      : 'border-neutral-300 text-neutral-700 hover:border-rose-300 hover:text-rose-500 dark:border-neutral-700 dark:text-neutral-300'
-                  }`}
-                >
-                  <HeartIcon className="h-4 w-4" filled={!!post.likedByPlayer} />
-                  {post.likes}
-                </button>
-              </div>
             </>
           )}
+
+          <div className="mt-3 flex items-center gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+            <button
+              onClick={focusReplyInput}
+              className="flex cursor-pointer items-center gap-1.5 rounded-full bg-sky-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-sky-600"
+            >
+              <ReplyIcon className="h-4 w-4" />
+              Reply
+            </button>
+            <span className="flex items-center gap-1.5 rounded-full border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
+              <RepostIcon className="h-4 w-4" />
+              {post.reposts}
+            </span>
+            <button
+              onClick={handleLike}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                post.likedByPlayer
+                  ? 'border-rose-300 text-rose-500'
+                  : 'border-neutral-300 text-neutral-700 hover:border-rose-300 hover:text-rose-500 dark:border-neutral-700 dark:text-neutral-300'
+              }`}
+            >
+              <HeartIcon className="h-4 w-4" filled={!!post.likedByPlayer} />
+              {post.likes}
+            </button>
+          </div>
         </div>
 
         {replyIds.length > 0 ? (
