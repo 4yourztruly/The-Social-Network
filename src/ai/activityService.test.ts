@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildActivitySystemPrompt, buildActivityUserPrompt, buildMediaCoveragePrompt } from './activityService'
+import {
+  buildActivitySystemPrompt,
+  buildActivityUserPrompt,
+  buildMediaCoveragePrompt,
+  parseActivityTurnResponse,
+} from './activityService'
 import type { ActivityMessage, NPC } from '../types'
 
 function makeNpc(overrides: Partial<NPC>): NPC {
@@ -64,6 +69,52 @@ describe('buildActivityUserPrompt', () => {
     const prompt = buildActivityUserPrompt([msg('player', 'I smile', 1), msg('narrator', 'They smile back', 2)], 'Alex')
     expect(prompt).toContain('Alex: I smile')
     expect(prompt).toContain('Narrator: They smile back')
+  })
+})
+
+describe('parseActivityTurnResponse', () => {
+  it('parses a well-formed response', () => {
+    const raw = [
+      'BEAT: Jamie laughs and leans back in the booth.',
+      'CHOICE: Ask them about their week over the appetizers',
+      'CHOICE: Bring up the rumor you saw online',
+      'CHOICE: Order dessert and change the subject entirely',
+    ].join('\n')
+    const result = parseActivityTurnResponse(raw)
+    expect(result?.beat).toContain('Jamie laughs')
+    expect(result?.choices).toHaveLength(3)
+  })
+
+  it('tolerates leading/trailing prose', () => {
+    const raw = ['Sure:', '', 'BEAT: The room goes quiet.', 'CHOICE: Say something', 'CHOICE: Stay silent', ''].join('\n')
+    const result = parseActivityTurnResponse(raw)
+    expect(result?.beat).toBe('The room goes quiet.')
+    expect(result?.choices).toHaveLength(2)
+  })
+
+  it('returns null when there is no BEAT line', () => {
+    expect(parseActivityTurnResponse('CHOICE: Say hi\nCHOICE: Walk away')).toBeNull()
+  })
+
+  it('returns null when fewer than 2 valid choices are found', () => {
+    expect(parseActivityTurnResponse('BEAT: Something happens.\nCHOICE: Only one')).toBeNull()
+  })
+
+  it('caps choices at 4', () => {
+    const raw = [
+      'BEAT: A lot happens.',
+      'CHOICE: One',
+      'CHOICE: Two',
+      'CHOICE: Three',
+      'CHOICE: Four',
+      'CHOICE: Five',
+    ].join('\n')
+    expect(parseActivityTurnResponse(raw)?.choices).toHaveLength(4)
+  })
+
+  it('returns null for garbage input', () => {
+    expect(parseActivityTurnResponse('lol what')).toBeNull()
+    expect(parseActivityTurnResponse('')).toBeNull()
   })
 })
 

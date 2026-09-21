@@ -8,7 +8,15 @@ import { applyPersonalityVoice } from './voice'
 // rule 1: "gameplay never blocks on AI"). AI narration (activityService.ts)
 // is the richer, opt-in path; this keeps the feature fully playable without it.
 
-export const ACTIVITY_CHOICES = ['Be charming', 'Be honest', 'Play it cool', 'Make a bold move'] as const
+// Always-available fallback choices — used whenever AI is off, unconfigured,
+// over budget, or fails to return usable scene-specific options. Deliberately
+// generic (not tied to the scene) since they have to work for any activity.
+export const ACTIVITY_CHOICES = [
+  'Lean into being charming and see how they respond',
+  'Be completely honest about how you feel right now',
+  'Stay relaxed and play it cool',
+  'Make a bold, unexpected move',
+] as const
 
 type ChoiceCategory = 'charming' | 'honest' | 'cool' | 'bold' | 'default'
 

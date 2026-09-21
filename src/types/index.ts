@@ -250,6 +250,10 @@ export interface Activity {
   tags: string[] // from the keyword tagger on `description`; feeds relationship/coverage effects
   endedAt?: number
   outcomeSummary?: string
+  // The current round of "what will you do" options offered to the player —
+  // refreshed after every narrator beat (see advanceActivity). Player can
+  // always ignore these and type their own move instead.
+  pendingChoices: string[]
 }
 
 export interface SaveGame {

@@ -4,7 +4,6 @@ import { isNPC } from '../../types'
 import { Avatar } from '../../components/Avatar'
 import { ArrowLeftIcon } from '../../components/icons'
 import { formatRelativeTime } from '../../engine/time'
-import { ACTIVITY_CHOICES } from '../../engine/activity'
 
 interface ActivityChatProps {
   activityId: string
@@ -148,24 +147,26 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
 
       {activity.status === 'active' && (
         <div className="shrink-0 border-t border-neutral-200 dark:border-neutral-800">
-          <div className="flex gap-2 overflow-x-auto px-4 pt-2">
-            {ACTIVITY_CHOICES.map((choice) => (
-              <button
-                key={choice}
-                onClick={() => handleSend(choice)}
-                className="shrink-0 cursor-pointer rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-              >
-                {choice}
-              </button>
-            ))}
-          </div>
+          {!isTyping && activity.pendingChoices.length > 0 && (
+            <div className="flex flex-col gap-2 px-4 pt-3">
+              {activity.pendingChoices.map((choice, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSend(choice)}
+                  className="cursor-pointer rounded-xl border border-neutral-200 px-4 py-3 text-left text-sm font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2 px-4 py-2">
             <Avatar avatar={player.avatar} seed={player.id} size={32} />
             <input
               value={text}
               onChange={(e) => setText(e.target.value.slice(0, 300))}
               onKeyDown={(e) => e.key === 'Enter' && handleSend(text)}
-              placeholder="Or say/do something else..."
+              placeholder="Or write your own move..."
               className="min-w-0 flex-1 bg-transparent text-[15px] placeholder-neutral-500 outline-none"
             />
             <button

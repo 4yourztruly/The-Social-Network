@@ -5,7 +5,7 @@ import type { EncounterChoice, EncounterRisk, EncounterTier } from '../engine/ra
 
 const REQUEST_TIMEOUT_MS = 12_000
 const MAX_SITUATION_CHARS = 260
-const MAX_CHOICE_CHARS = 60
+const MAX_CHOICE_CHARS = 160
 const MAX_OUTCOME_CHARS = 180
 const MAX_HISTORY_LINES = 6
 
@@ -39,9 +39,10 @@ export function buildEncounterPrompt(
       : 'No one else is available to be involved — keep it solo (paparazzi, a stranger, a crowd, an interviewer, etc. are fine as unnamed background).',
     'Respond in EXACTLY this format, nothing else, no extra commentary:',
     'SITUATION: <1-2 sentence description of what just happened, present tense, puts the player on the spot>',
-    'CHOICE: <short label, 2-5 words> | safe',
-    'CHOICE: <short label, 2-5 words> | bold',
-    'CHOICE: <short label, 2-5 words> | safe or bold',
+    'CHOICE: <a specific, vivid sentence spelling out exactly what the player does or says, 8-16 words> | safe',
+    'CHOICE: <a specific, vivid sentence spelling out exactly what the player does or says, 8-16 words> | bold',
+    'CHOICE: <a specific, vivid sentence spelling out exactly what the player does or says, 8-16 words> | safe or bold',
+    'Each choice must describe the concrete action/line, not a vague category — "Fire back with a joke about their last post" not "Clap back".',
     '"safe" choices play it careful; "bold" choices are riskier and swing harder both ways, for better or worse. Exactly 3 CHOICE lines.',
     'No slurs, no explicit content, no real-world public figures other than the named cast above.',
   ]

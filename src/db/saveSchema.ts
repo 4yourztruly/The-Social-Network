@@ -161,6 +161,7 @@ const activitySchema = z.object({
   tags: z.array(z.string()),
   endedAt: z.number().optional(),
   outcomeSummary: z.string().optional(),
+  pendingChoices: z.array(z.string()).default([]),
 })
 
 export const saveGameSchema = z.object({

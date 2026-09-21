@@ -23,41 +23,43 @@ export interface EncounterPrompt {
   choices: EncounterChoice[]
 }
 
+// Choice labels spell out exactly what the player does or says, not a
+// terse verb phrase — so the player knows what they're actually picking.
 const PROMPTS: EncounterPrompt[] = [
   {
     id: 'heckler',
     text: 'A heckler in the crowd yells something about you loud enough for everyone to hear.',
     choices: [
-      { id: 'clap_back', label: 'Clap back', risk: 'bold' },
-      { id: 'laugh_it_off', label: 'Laugh it off', risk: 'safe' },
-      { id: 'ignore', label: 'Ignore them', risk: 'safe' },
+      { id: 'clap_back', label: 'Turn straight to them and fire back a sharp one-liner', risk: 'bold' },
+      { id: 'laugh_it_off', label: 'Laugh it off and wave, refusing to let it land', risk: 'safe' },
+      { id: 'ignore', label: 'Keep walking like you never heard a thing', risk: 'safe' },
     ],
   },
   {
     id: 'photographer',
     text: 'A photographer catches you off guard leaving a late-night spot.',
     choices: [
-      { id: 'smile', label: 'Smile for the camera', risk: 'safe' },
-      { id: 'cover_face', label: 'Cover your face and rush off', risk: 'bold' },
-      { id: 'joke', label: 'Make a joke of it', risk: 'bold' },
+      { id: 'smile', label: 'Stop, smile, and give them a clean shot', risk: 'safe' },
+      { id: 'cover_face', label: 'Cover your face with your jacket and rush to the car', risk: 'bold' },
+      { id: 'joke', label: 'Strike a ridiculous pose and turn it into a joke', risk: 'bold' },
     ],
   },
   {
     id: 'interview_trap',
     text: 'A reporter asks you a loaded question, live, with cameras rolling.',
     choices: [
-      { id: 'honest', label: 'Answer honestly', risk: 'bold' },
-      { id: 'deflect', label: 'Deflect the question', risk: 'safe' },
-      { id: 'no_comment', label: '"No comment."', risk: 'safe' },
+      { id: 'honest', label: 'Answer completely honestly, even knowing it could blow up', risk: 'bold' },
+      { id: 'deflect', label: 'Deflect with a vague, safe non-answer', risk: 'safe' },
+      { id: 'no_comment', label: 'Say "no comment" and end the interview there', risk: 'safe' },
     ],
   },
   {
     id: 'fan_moment',
     text: 'A young fan works up the courage to approach you in public.',
     choices: [
-      { id: 'make_their_day', label: "Make their day", risk: 'safe' },
-      { id: 'quick_photo', label: 'Quick photo and go', risk: 'safe' },
-      { id: 'brush_past', label: 'Brush right past them', risk: 'bold' },
+      { id: 'make_their_day', label: 'Stop everything, kneel down, and really talk to them', risk: 'safe' },
+      { id: 'quick_photo', label: 'Take a quick, friendly photo and keep moving', risk: 'safe' },
+      { id: 'brush_past', label: "Brush right past them like they're not there", risk: 'bold' },
     ],
   },
   {
@@ -65,9 +67,9 @@ const PROMPTS: EncounterPrompt[] = [
     text: 'You run into {celeb} at an event and the conversation turns awkward fast.',
     requiresCeleb: true,
     choices: [
-      { id: 'own_it', label: 'Own the awkwardness', risk: 'bold' },
-      { id: 'smooth_over', label: 'Smooth it over', risk: 'safe' },
-      { id: 'walk_away', label: 'Walk away', risk: 'bold' },
+      { id: 'own_it', label: 'Call out the awkwardness out loud and laugh about it together', risk: 'bold' },
+      { id: 'smooth_over', label: 'Smoothly change the subject and keep things light', risk: 'safe' },
+      { id: 'walk_away', label: 'Cut the conversation short and walk away', risk: 'bold' },
     ],
   },
   {
@@ -75,9 +77,9 @@ const PROMPTS: EncounterPrompt[] = [
     text: '{celeb} dares you to do something ridiculous in front of everyone.',
     requiresCeleb: true,
     choices: [
-      { id: 'do_it', label: 'Do it', risk: 'bold' },
-      { id: 'laugh_no', label: "Laugh and say no", risk: 'safe' },
-      { id: 'one_up', label: 'One-up them instead', risk: 'bold' },
+      { id: 'do_it', label: 'Go all in and actually do the dare', risk: 'bold' },
+      { id: 'laugh_no', label: 'Laugh, shake your head, and turn it down', risk: 'safe' },
+      { id: 'one_up', label: 'Top the dare with something even bolder of your own', risk: 'bold' },
     ],
   },
 ]

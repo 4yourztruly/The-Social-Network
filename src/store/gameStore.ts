@@ -50,6 +50,7 @@ import { fillTemplate } from '../engine/templates/filler'
 import { pushRecentLine, selectLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
 import {
+  ACTIVITY_CHOICES,
   coverageChance,
   pickMediaOutlet,
   templatedActivityBeat,
@@ -66,7 +67,7 @@ import {
 import { msUntilNextEvent, recordEventTriggered } from '../engine/eventCooldown'
 import { generateAiDmReply } from '../ai/dmService'
 import { generateAiComment } from '../ai/commentService'
-import { generateActivityBeat, generateMediaCoverage } from '../ai/activityService'
+import { generateActivityTurn, generateMediaCoverage } from '../ai/activityService'
 import { generateAiEncounter, generateAiEncounterOutcome } from '../ai/eventService'
 import { getProviderConfig } from '../ai/keyStorage'
 import { canSpend, recordSpend } from '../ai/budget'
@@ -372,8 +373,15 @@ export const useGameStore = create<GameState>((set, get) => {
     }))
   }
 
-  // Appends one narrator beat to an activity's transcript.
-  function appendActivityMessage(activityId: string, text: string, origin: ActivityMessage['origin']) {
+  // Appends one narrator beat to an activity's transcript and sets the next
+  // round of "what will you do" choices the player picks from (or ignores,
+  // typing their own move instead).
+  function appendActivityMessage(
+    activityId: string,
+    text: string,
+    origin: ActivityMessage['origin'],
+    choices: readonly string[],
+  ) {
     set((state) => {
       const activity = state.activities[activityId]
       if (!activity) return state
@@ -381,15 +389,16 @@ export const useGameStore = create<GameState>((set, get) => {
       return {
         activities: {
           ...state.activities,
-          [activityId]: { ...activity, messages: [...activity.messages, msg] },
+          [activityId]: { ...activity, messages: [...activity.messages, msg], pendingChoices: [...choices] },
         },
       }
     })
   }
 
   // Fires the next narrator beat for an activity — the AI path (narrated,
-  // context-aware) when available, deterministic templates otherwise or on
-  // any failure. Same shape as the DM/comment AI paths elsewhere in this file.
+  // context-aware, plus the player's next choices) when available,
+  // deterministic templates otherwise or on any failure. Same shape as the
+  // DM/comment AI paths elsewhere in this file.
   function advanceActivity(activityId: string, isOpening: boolean) {
     const state = get()
     const activity = state.activities[activityId]
@@ -411,28 +420,29 @@ export const useGameStore = create<GameState>((set, get) => {
           activity.messages.at(-1)?.text ?? '',
           participants,
         )
+    const fallbackChoices = ACTIVITY_CHOICES
 
     if (!aiEligible) {
-      appendActivityMessage(activityId, fallbackText, 'template')
+      appendActivityMessage(activityId, fallbackText, 'template', fallbackChoices)
       return
     }
 
     set((s) => ({ aiTyping: s.aiTyping.includes(activityId) ? s.aiTyping : [...s.aiTyping, activityId] }))
 
-    void generateActivityBeat({
+    void generateActivityTurn({
       description: activity.description,
       participants,
       playerDisplayName: playerProfile.displayName,
       orgName,
       recentMessages: activity.messages,
       config,
-    }).then((aiText) => {
+    }).then((turn) => {
       set((s) => ({ aiTyping: s.aiTyping.filter((id) => id !== activityId) }))
-      if (aiText) {
+      if (turn) {
         recordSpend(config.id)
-        appendActivityMessage(activityId, aiText, 'ai')
+        appendActivityMessage(activityId, turn.beat, 'ai', turn.choices)
       } else {
-        appendActivityMessage(activityId, fallbackText, 'template')
+        appendActivityMessage(activityId, fallbackText, 'template', fallbackChoices)
       }
     })
   }
@@ -1066,6 +1076,7 @@ export const useGameStore = create<GameState>((set, get) => {
       messages: [],
       turnCount: 0,
       tags,
+      pendingChoices: [],
     }
 
     set((s) => ({ activities: { ...s.activities, [id]: activity } }))
@@ -1102,7 +1113,12 @@ export const useGameStore = create<GameState>((set, get) => {
       return {
         activities: {
           ...state.activities,
-          [activityId]: { ...activity, messages: [...activity.messages, msg], turnCount: activity.turnCount + 1 },
+          [activityId]: {
+            ...activity,
+            messages: [...activity.messages, msg],
+            turnCount: activity.turnCount + 1,
+            pendingChoices: [],
+          },
         },
       }
     })
