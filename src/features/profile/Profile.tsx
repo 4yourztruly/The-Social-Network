@@ -19,15 +19,6 @@ interface ProfileProps {
 
 type Tab = 'overview' | 'posts' | 'replies'
 
-// Rating keys are career-specific snake_case (finishing, vocals, arm_strength,
-// ...) — prettify generically instead of hard-coding one career's labels.
-function prettifyStatKey(key: string): string {
-  return key
-    .split('_')
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
 export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBack, onOpenSettings }: ProfileProps) {
   const profile = useGameStore((s) => s.profiles[profileId])
   const player = useGameStore((s) => s.player)
@@ -152,21 +143,11 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
 
           {profile.isPlayer && (
             <>
-              <div className="grid grid-cols-2 gap-2 rounded-xl border border-neutral-200 p-3 text-center text-sm dark:border-neutral-800">
-                <Stat label="Humor" value={player.humor} />
-                <Stat label="Aura" value={player.aura} />
+              <h2 className="text-sm font-semibold text-neutral-500">Social Media Presence</h2>
+              <div className="mt-2 flex flex-col gap-4 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800">
+                <StatBar emoji="😂" label="Humor" value={player.humor} change={player.lastHumorChange} />
+                <StatBar emoji="🌟" label="Aura" value={player.aura} change={player.lastAuraChange} />
               </div>
-
-              {Object.keys(player.ratings).length > 0 && (
-                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  {Object.entries(player.ratings).map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between">
-                      <span className="text-neutral-500">{prettifyStatKey(key)}</span>
-                      <span className="font-semibold">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <div className="mt-4">
                 <RelationshipList onOpenProfile={onOpenProfile} />
@@ -201,11 +182,43 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
   )
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+interface StatBarProps {
+  emoji: string
+  label: string
+  value: number
+  change?: { delta: number; reason: string }
+}
+
+// A single Humor/Aura row: emoji + label, percentage (with a colored delta
+// when it just moved), a progress bar, and a caption naming what moved it —
+// same visual language as RelationshipList's cards, just for the player's
+// own stats instead of a relationship.
+function StatBar({ emoji, label, value, change }: StatBarProps) {
+  const pct = Math.max(0, Math.min(100, value))
   return (
     <div>
-      <p className="text-lg font-bold">{value}</p>
-      <p className="text-xs text-neutral-500">{label}</p>
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium">
+          {emoji} {label}
+        </span>
+        <span className="flex items-center gap-1.5">
+          {change && change.delta !== 0 && (
+            <span
+              className={`text-xs font-semibold ${
+                change.delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+              }`}
+            >
+              {change.delta > 0 ? '+' : ''}
+              {change.delta}%
+            </span>
+          )}
+          <span className="font-semibold">{pct}%</span>
+        </span>
+      </div>
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+        <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${pct}%` }} />
+      </div>
+      {change?.reason && <p className="mt-1.5 truncate text-xs text-neutral-500">{change.reason}</p>}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyPlayerEffects } from './effects'
+import { applyPlayerEffects, lastStatChangesFromEffects } from './effects'
 import type { PlayerState } from '../types'
 
 function basePlayer(): PlayerState {
@@ -43,5 +43,33 @@ describe('applyPlayerEffects', () => {
       { type: 'relationship', target: 'npc_1', delta: 5 },
     ])
     expect(next).toEqual(before)
+  })
+})
+
+describe('lastStatChangesFromEffects', () => {
+  it('captures humor/aura deltas with the given reason and timestamp', () => {
+    const changes = lastStatChangesFromEffects(
+      [
+        { type: 'stat', target: 'humor', delta: 4 },
+        { type: 'stat', target: 'aura', delta: -2 },
+      ],
+      'From your post: "lol"',
+      1000,
+    )
+    expect(changes.lastHumorChange).toEqual({ delta: 4, reason: 'From your post: "lol"', at: 1000 })
+    expect(changes.lastAuraChange).toEqual({ delta: -2, reason: 'From your post: "lol"', at: 1000 })
+  })
+
+  it('ignores zero deltas and non-stat effects', () => {
+    const changes = lastStatChangesFromEffects(
+      [
+        { type: 'stat', target: 'humor', delta: 0 },
+        { type: 'followers', delta: 20 },
+      ],
+      'reason',
+      1000,
+    )
+    expect(changes.lastHumorChange).toBeUndefined()
+    expect(changes.lastAuraChange).toBeUndefined()
   })
 })

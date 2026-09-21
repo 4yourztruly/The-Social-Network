@@ -102,6 +102,8 @@ const playerStateSchema = z.object({
   traits: z.array(z.string()),
   humor: z.number(),
   aura: z.number(),
+  lastHumorChange: z.object({ delta: z.number(), reason: z.string(), at: z.number() }).optional(),
+  lastAuraChange: z.object({ delta: z.number(), reason: z.string(), at: z.number() }).optional(),
   xp: z.number(),
 })
 

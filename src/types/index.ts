@@ -109,6 +109,11 @@ export interface PlayerState {
   // Social stats — see PROJECT_SPEC.md section 17.5 "Outcome banner + stat deltas"
   humor: number // gained from posts that land as funny
   aura: number // gained from posts that land as confident/iconic
+  // Captions the profile page's stat bars with what most recently moved
+  // them — same idea as NPC.lastRelationshipChange, just for the player's
+  // own Humor/Aura.
+  lastHumorChange?: { delta: number; reason: string; at: number }
+  lastAuraChange?: { delta: number; reason: string; at: number }
   xp: number
 }
 

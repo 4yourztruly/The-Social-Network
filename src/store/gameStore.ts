@@ -33,7 +33,7 @@ import { isNPC } from '../types'
 import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
 import { createGameEvent } from '../engine/events'
-import { applyPlayerEffects } from '../engine/effects'
+import { applyPlayerEffects, lastStatChangesFromEffects } from '../engine/effects'
 import { statDeltasForTags } from '../engine/formulas'
 import { splitDueItems } from '../engine/scheduler'
 import {
@@ -532,7 +532,10 @@ export const useGameStore = create<GameState>((set, get) => {
     const outcome = tierOutcome(tier, playerProfile.followers)
     const fallbackText = outcomeText(rng, tier)
 
-    const nextPlayer = applyPlayerEffects(state.player, outcome.statDeltas)
+    const nextPlayer = {
+      ...applyPlayerEffects(state.player, outcome.statDeltas),
+      ...lastStatChangesFromEffects(outcome.statDeltas, fallbackText, Date.now()),
+    }
     const nextPlayerProfile: Profile = {
       ...playerProfile,
       followers: Math.max(0, playerProfile.followers + outcome.followerDelta),
@@ -914,7 +917,11 @@ export const useGameStore = create<GameState>((set, get) => {
     post.likes = result.engagement.likes
     post.reposts = result.engagement.reposts
 
-    const nextPlayer = applyPlayerEffects(state.player, result.statDeltas)
+    const postReason = `From your post: "${text.length > 60 ? `${text.slice(0, 60)}…` : text}"`
+    const nextPlayer = {
+      ...applyPlayerEffects(state.player, result.statDeltas),
+      ...lastStatChangesFromEffects(result.statDeltas, postReason, now),
+    }
     const nextPlayerProfile: Profile = {
       ...playerProfile,
       followers: playerProfile.followers + result.followerDelta,
@@ -1165,7 +1172,10 @@ export const useGameStore = create<GameState>((set, get) => {
 
     const rng = mulberry32(hashStringToSeed(`${activityId}_end`))
     const statDeltas = statDeltasForTags(rng, activity.tags)
-    const nextPlayer = applyPlayerEffects(state.player, statDeltas)
+    const nextPlayer = {
+      ...applyPlayerEffects(state.player, statDeltas),
+      ...lastStatChangesFromEffects(statDeltas, activity.description, Date.now()),
+    }
     const followerDelta = statDeltas
       .filter((e) => e.type === 'followers')
       .reduce((sum, e) => sum + e.delta, 0)
