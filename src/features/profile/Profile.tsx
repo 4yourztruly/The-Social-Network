@@ -77,7 +77,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
           <button
             onClick={onBack}
             aria-label="Back"
-            className="absolute left-3 top-3 cursor-pointer rounded-full bg-black/40 p-2 text-white backdrop-blur hover:bg-black/60"
+            className="absolute left-4 top-4 cursor-pointer rounded-full bg-black/40 p-2 text-white backdrop-blur hover:bg-black/60"
           >
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
@@ -86,7 +86,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
           <button
             onClick={onOpenSettings}
             aria-label="Settings"
-            className="absolute right-3 top-3 cursor-pointer rounded-full bg-black/40 p-2 text-white backdrop-blur hover:bg-black/60"
+            className="absolute right-4 top-4 cursor-pointer rounded-full bg-black/40 p-2 text-white backdrop-blur hover:bg-black/60"
           >
             <SettingsIcon className="h-5 w-5" />
           </button>
@@ -99,7 +99,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
             <Avatar avatar={profile.avatar} seed={profile.id} size={80} />
           </div>
           {npc && (
-            <div className="mb-2 flex gap-2">
+            <div className="mb-2 flex gap-3">
               {onOpenDM && (
                 <button
                   onClick={() => onOpenDM(npc.id)}
