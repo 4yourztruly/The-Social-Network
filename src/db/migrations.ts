@@ -5,6 +5,7 @@
 // functions") and section 17.7.
 
 import { defaultVibeForPersona, defaultWorldSettings } from '../content/seed'
+import { inferPersonaFromBio } from '../engine/personaInference'
 import type { Persona } from '../types'
 
 type RawRecord = Record<string, unknown>
@@ -95,15 +96,57 @@ function migrateV5toV6(raw: RawRecord): RawRecord {
   }
 }
 
+// Repairs a schema bug (see saveSchema.ts's `profiles` union comment) that
+// let z.union([profileSchema, npcSchema]) silently strip persona/vibe/
+// relationship/followedByPlayer/etc from every NPC profile on load, any
+// time the (previously non-strict) profileSchema was tried first and
+// "matched" an NPC object by quietly stripping its unknown keys — so a
+// save touched by that bug has NPCs indistinguishable from a plain Profile
+// except by having no `persona`. Re-infers persona from name/bio (the same
+// heuristic addCustomPerson uses) and refills the rest with safe, neutral
+// defaults. Relationship/follow state from before the corruption can't be
+// recovered — it was already gone by the time this runs — but this at
+// least gets People/Follow/DM working again instead of staying broken.
+function migrateV6toV7(raw: RawRecord): RawRecord {
+  const profiles = { ...(raw.profiles as Record<string, RawRecord>) }
+  for (const [id, profile] of Object.entries(profiles)) {
+    if (profile.isPlayer) continue
+    if (typeof profile.persona === 'string') continue // already a healthy NPC
+
+    const persona = inferPersonaFromBio(
+      typeof profile.displayName === 'string' ? profile.displayName : '',
+      typeof profile.bio === 'string' ? profile.bio : '',
+    )
+    profiles[id] = {
+      ...profile,
+      persona,
+      personality: profile.personality ?? [],
+      relationship: profile.relationship ?? 0,
+      vibe: profile.vibe ?? defaultVibeForPersona(persona),
+      mood: profile.mood ?? 0,
+      postingStyle: profile.postingStyle ?? { emoji: 0.4, caps: 0.1, hashtags: 0.1 },
+      recentLineIds: profile.recentLineIds ?? [],
+      followedByPlayer: profile.followedByPlayer ?? false,
+    }
+  }
+
+  return {
+    ...raw,
+    version: 7,
+    profiles,
+  }
+}
+
 const MIGRATIONS: Record<number, (raw: RawRecord) => RawRecord> = {
   1: migrateV1toV2,
   2: migrateV2toV3,
   3: migrateV3toV4,
   4: migrateV4toV5,
   5: migrateV5toV6,
+  6: migrateV6toV7,
 }
 
-export const CURRENT_SAVE_VERSION = 6
+export const CURRENT_SAVE_VERSION = 7
 
 export function migrateSaveData(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null) return raw

@@ -23,7 +23,13 @@ const profileFields = {
   isPlayer: z.boolean(),
 }
 
-const profileSchema = z.object(profileFields)
+// .strict() matters here: z.object() by default *strips* unrecognized keys
+// and still succeeds, so a non-strict profileSchema would happily "match" an
+// NPC object too (silently dropping persona/vibe/relationship/etc from the
+// result). That made the profiles union below pick profileSchema for NPCs
+// whenever it was tried first, since it never actually failed — see the
+// union's own comment.
+const profileSchema = z.object(profileFields).strict()
 
 const relationshipVibeSchema = z.enum([
   'friend',
@@ -168,7 +174,14 @@ export const saveGameSchema = z.object({
   version: z.number(),
   clock: z.number(),
   player: playerStateSchema,
-  profiles: z.record(z.string(), z.union([profileSchema, npcSchema])),
+  // npcSchema first: it's the strictly larger/more specific shape, so trying
+  // it first (on top of profileSchema now being .strict()) means an NPC
+  // never gets silently mis-matched against the plain Profile schema and
+  // stripped of persona/vibe/relationship/followedByPlayer/etc — the exact
+  // bug that made every NPC quietly stop being recognized as an NPC (People
+  // list empty, Follow/DM broken) after the save round-tripped through
+  // IndexedDB once.
+  profiles: z.record(z.string(), z.union([npcSchema, profileSchema])),
   posts: z.record(z.string(), postSchema),
   threads: z.record(z.string(), dmThreadSchema),
   scheduled: z.array(scheduledItemSchema),

@@ -25,8 +25,16 @@ body,
 }
 
 html {
-  /* Stops mobile browsers auto-inflating text size in landscape/columns,
-     which otherwise fights with our own responsive type scale. */
+  /* `100%` here is a static/large-viewport measurement, which on mobile
+     Safari/Chrome can be TALLER than the actual visible (dynamic) viewport
+     when the address bar is hidden — leaving a gap of plain body background
+     below the app shell (which sizes itself with 100dvh, see App.tsx),
+     pushing the bottom nav up off the true bottom edge. Matching the same
+     100dvh unit here keeps every ancestor in the height:100% chain in sync
+     with the app shell, so there's nothing left below it to leave a gap.
+     Stops mobile browsers auto-inflating text size in landscape/columns
+     too, which otherwise fights with our own responsive type scale. */
+  height: 100dvh;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
