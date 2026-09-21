@@ -99,7 +99,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
             <Avatar avatar={profile.avatar} seed={profile.id} size={80} />
           </div>
           {npc && (
-            <div className="mb-2 flex gap-3">
+            <div className="mb-2 flex translate-y-1.5 gap-3">
               {onOpenDM && (
                 <button
                   onClick={() => onOpenDM(npc.id)}
@@ -124,7 +124,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
           {profile.isPlayer && (
             <button
               onClick={() => setEditingProfile(true)}
-              className="mb-2 cursor-pointer rounded-full border border-neutral-300 px-4 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-800"
+              className="mb-2 translate-y-1.5 cursor-pointer rounded-full border border-neutral-300 px-4 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-800"
             >
               Edit Profile
             </button>
