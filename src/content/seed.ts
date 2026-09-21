@@ -133,9 +133,11 @@ function seedPosts(
   orgForFlavor: string,
 ): Post[] {
   const now = Date.now()
-  // Commenter-tier NPCs (the general public — see engine/npcTier.ts) only
-  // ever comment/reply, never author their own top-level posts.
-  const npcList = Object.values(npcs).filter(isViewableProfile)
+  // Any NPC tier can author a top-level post — commenter-tier NPCs (the
+  // general public) still can't be followed/DMed or have a viewable
+  // profile (see engine/npcTier.ts), but they post/comment/reply just
+  // like everyone else.
+  const npcList = Object.values(npcs)
   const posts: Post[] = []
   for (let i = 0; i < count; i++) {
     const author = pick(rng, npcList)

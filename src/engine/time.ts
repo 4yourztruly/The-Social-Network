@@ -22,3 +22,10 @@ export function formatRelativeTime(timestamp: number, now = Date.now()): string 
   }
   return `${value}${suffix}`
 }
+
+export function formatFullTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const day = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return `${time} · ${day}`
+}
