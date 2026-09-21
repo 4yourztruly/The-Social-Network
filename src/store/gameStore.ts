@@ -67,6 +67,7 @@ import { msUntilNextEvent, recordEventTriggered } from '../engine/eventCooldown'
 import { generateAiDmReply } from '../ai/dmService'
 import { generateAiComment } from '../ai/commentService'
 import { generateActivityBeat, generateMediaCoverage } from '../ai/activityService'
+import { generateAiEncounter, generateAiEncounterOutcome } from '../ai/eventService'
 import { getProviderConfig } from '../ai/keyStorage'
 import { canSpend, recordSpend } from '../ai/budget'
 
@@ -87,8 +88,10 @@ export interface PostOutcome {
 export interface RandomEncounter {
   id: string
   text: string
+  loading: boolean // true while the AI situation/outcome call is in flight
   celebId?: string
   choices: EncounterChoice[]
+  pendingChoiceLabel?: string // set while resolving, so the UI can show what was picked during the wait
   resolution?: {
     text: string
     tier: EncounterTier
@@ -153,12 +156,15 @@ export interface GameState {
 
   // activities
   createActivity: (input: CreateActivityInput) => string
+  startActivity: (activityId: string) => void
+  deleteActivity: (activityId: string) => void
   sendActivityChoice: (activityId: string, text: string) => void
   endActivity: (activityId: string) => void
 
   // random events (the Event button)
   triggerRandomEncounter: () => boolean // false if still on cooldown
   resolveEncounterChoice: (choiceId: string) => void
+  resolveEncounterCustom: (text: string) => void
   dismissEncounter: () => void
 
   // settings actions
@@ -184,7 +190,9 @@ export interface AddCustomPersonInput {
 export interface CreateActivityInput {
   description: string
   participantIds: string[]
-  delayMs: number // 0 = starts immediately
+  // Purely a "planned for" label (e.g. "Tonight") shown once created —
+  // activities never auto-start; the player always taps Start explicitly.
+  plannedLabel: string
 }
 
 function buildInitialState(input: OnboardingInput) {
@@ -489,6 +497,96 @@ export const useGameStore = create<GameState>((set, get) => {
         materializeCoveragePost(aiText, 'ai')
       } else {
         materializeCoveragePost(fallbackText, 'template')
+      }
+    })
+  }
+
+  // Resolves the player's Event choice (predetermined or freely typed).
+  // Stat/follower effects are always deterministic and apply immediately;
+  // only the outcome NARRATION tries AI first (grounded in the situation
+  // and the tier already rolled), falling back to a canned line on any
+  // failure — the activity log entry is written once the final text is
+  // known, so it never disagrees with what was shown.
+  function finishEncounter(choice: EncounterChoice) {
+    const state = get()
+    const encounter = state.activeEncounter
+    if (!encounter) return
+    const encounterId = encounter.id
+    const encounterText = encounter.text
+
+    const rng = mulberry32(hashStringToSeed(`${encounterId}_resolve_${choice.id}_${Date.now()}`))
+    const tier = rollTier(rng, choice.risk)
+    const playerProfile = state.profiles[PLAYER_ID] as Profile
+    const outcome = tierOutcome(tier, playerProfile.followers)
+    const fallbackText = outcomeText(rng, tier)
+
+    const nextPlayer = applyPlayerEffects(state.player, outcome.statDeltas)
+    const nextPlayerProfile: Profile = {
+      ...playerProfile,
+      followers: Math.max(0, playerProfile.followers + outcome.followerDelta),
+    }
+
+    set((s) => ({
+      player: nextPlayer,
+      profiles: { ...s.profiles, [PLAYER_ID]: nextPlayerProfile },
+      activeEncounter:
+        s.activeEncounter && s.activeEncounter.id === encounterId
+          ? { ...s.activeEncounter, loading: true, pendingChoiceLabel: choice.label }
+          : s.activeEncounter,
+    }))
+
+    function finalize(resolutionText: string) {
+      set((s) => {
+        if (!s.activeEncounter || s.activeEncounter.id !== encounterId) return s
+        return {
+          activeEncounter: {
+            ...s.activeEncounter,
+            loading: false,
+            resolution: { text: resolutionText, tier, statDeltas: outcome.statDeltas, followerDelta: outcome.followerDelta },
+          },
+        }
+      })
+
+      const logEntry: ActivityLogEntry = {
+        id: makeId('log'),
+        at: Date.now(),
+        action: 'event',
+        deltas: outcome.statDeltas,
+        summary: `Event: ${encounterText} — chose "${choice.label}". ${resolutionText}`,
+      }
+      set((s) => ({ activityLog: [...s.activityLog, logEntry] }))
+
+      // A bad outcome can leak to the tabloids, same as a risky Activity —
+      // only when it's actually newsworthy (see coverageChance), never guaranteed.
+      if (outcome.tags.length > 0) {
+        const chance = coverageChance(outcome.tags, 3)
+        if (chance > 0 && rng() < chance) {
+          const npcs = Object.values(get().profiles).filter(isNPC)
+          const outlet = pickMediaOutlet(npcs)
+          if (outlet) triggerMediaCoverage(outlet, encounterText, outcome.tags)
+        }
+      }
+    }
+
+    const config = state.settings.aiEnabled ? getProviderConfig(state.settings.activeProviderId) : undefined
+    const aiOk = !!config && canSpend(config.id, config.rpdBudget)
+    if (!aiOk) {
+      finalize(fallbackText)
+      return
+    }
+
+    void generateAiEncounterOutcome({
+      situationText: encounterText,
+      choiceLabel: choice.label,
+      tier,
+      playerDisplayName: playerProfile.displayName,
+      config,
+    }).then((aiText) => {
+      if (aiText) {
+        recordSpend(config.id)
+        finalize(aiText)
+      } else {
+        finalize(fallbackText)
       }
     })
   }
@@ -947,43 +1045,49 @@ export const useGameStore = create<GameState>((set, get) => {
     })
   },
 
+  // Always creates in 'scheduled' status — activities never auto-start.
+  // The player explicitly taps Start (startActivity) whenever they want to
+  // actually begin the scene, which is when the opening beat is generated.
   createActivity: (input) => {
     const state = get()
     const pack = CAREER_PACKS[state.player.career]
     const tags = scanKeywordTags(input.description, pack.keywordRules)
     const now = Date.now()
     const id = makeId('activity')
-    const startAt = now + Math.max(0, input.delayMs)
 
     const activity: Activity = {
       id,
       description: input.description.trim(),
       participantIds: input.participantIds,
-      status: input.delayMs > 0 ? 'scheduled' : 'active',
-      startAt,
+      status: 'scheduled',
+      startAt: now,
+      plannedLabel: input.plannedLabel,
       createdAt: now,
       messages: [],
       turnCount: 0,
       tags,
     }
 
-    if (input.delayMs > 0) {
-      const scheduledItem: ScheduledItem = {
-        id: makeId('sched'),
-        dueAt: startAt,
-        kind: 'activity_start',
-        payload: { activityId: id },
-      }
-      set((s) => ({
-        activities: { ...s.activities, [id]: activity },
-        scheduled: [...s.scheduled, scheduledItem],
-      }))
-    } else {
-      set((s) => ({ activities: { ...s.activities, [id]: activity } }))
-      advanceActivity(id, true)
-    }
-
+    set((s) => ({ activities: { ...s.activities, [id]: activity } }))
     return id
+  },
+
+  startActivity: (activityId) => {
+    const activity = get().activities[activityId]
+    if (!activity || activity.status !== 'scheduled') return
+    set((s) => ({
+      activities: { ...s.activities, [activityId]: { ...activity, status: 'active' } },
+    }))
+    advanceActivity(activityId, true)
+  },
+
+  deleteActivity: (activityId) => {
+    set((s) => {
+      if (!s.activities[activityId]) return s
+      const activities = { ...s.activities }
+      delete activities[activityId]
+      return { activities }
+    })
   },
 
   sendActivityChoice: (activityId, text) => {
@@ -1069,123 +1173,122 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  // Generates the situation with AI when configured (grounded in recent
+  // posts/activities/events — see ai/eventService.ts), falling back to the
+  // fixed prompt pool instantly when AI is off/unconfigured/over budget.
+  // The fallback is always precomputed, even on the AI path, in case the
+  // call fails.
   triggerRandomEncounter: () => {
     if (msUntilNextEvent() > 0) return false
     const state = get()
     const circle = Object.values(state.profiles).filter(isNPC).filter((n) => n.followedByPlayer)
     const rng = mulberry32(hashStringToSeed(`event_${Date.now()}`))
-    const prompt = pickPrompt(rng, circle.length > 0)
-    const celeb = prompt.requiresCeleb && circle.length > 0 ? pick(rng, circle) : undefined
+    const celeb = circle.length > 0 && rng() < 0.5 ? pick(rng, circle) : undefined
+    const fallbackPrompt = pickPrompt(rng, !!celeb)
+    const fallbackText = fallbackPrompt.text.replace('{celeb}', celeb?.displayName ?? 'someone')
+    const encounterId = makeId('event')
+
+    const config = state.settings.aiEnabled ? getProviderConfig(state.settings.activeProviderId) : undefined
+    const aiOk = !!config && canSpend(config.id, config.rpdBudget)
+    recordEventTriggered()
+
+    if (!aiOk) {
+      set({
+        activeEncounter: {
+          id: encounterId,
+          text: fallbackText,
+          loading: false,
+          celebId: celeb?.id,
+          choices: fallbackPrompt.choices,
+        },
+      })
+      return true
+    }
 
     set({
-      activeEncounter: {
-        id: makeId('event'),
-        text: prompt.text.replace('{celeb}', celeb?.displayName ?? 'someone'),
-        celebId: celeb?.id,
-        choices: prompt.choices,
-      },
+      activeEncounter: { id: encounterId, text: '', loading: true, celebId: celeb?.id, choices: [] },
     })
-    recordEventTriggered()
+
+    const playerProfile = state.profiles[PLAYER_ID] as Profile
+    const pack = CAREER_PACKS[state.player.career]
+    const orgName = state.player.club || pack.worldName
+
+    void generateAiEncounter({
+      playerDisplayName: playerProfile.displayName,
+      orgName,
+      recentActivity: state.activityLog,
+      celeb: celeb ?? null,
+      config,
+    }).then((generated) => {
+      set((s) => {
+        if (!s.activeEncounter || s.activeEncounter.id !== encounterId) return s
+        if (generated) {
+          recordSpend(config.id)
+          return { activeEncounter: { ...s.activeEncounter, text: generated.text, choices: generated.choices, loading: false } }
+        }
+        return {
+          activeEncounter: { ...s.activeEncounter, text: fallbackText, choices: fallbackPrompt.choices, loading: false },
+        }
+      })
+    })
+
     return true
   },
 
   resolveEncounterChoice: (choiceId) => {
-    const state = get()
-    const encounter = state.activeEncounter
-    if (!encounter || encounter.resolution) return
+    const encounter = get().activeEncounter
+    if (!encounter || encounter.resolution || encounter.loading) return
     const choice = encounter.choices.find((c) => c.id === choiceId)
     if (!choice) return
+    finishEncounter(choice)
+  },
 
-    const rng = mulberry32(hashStringToSeed(`${encounter.id}_resolve`))
-    const tier = rollTier(rng, choice.risk)
-    const playerProfile = state.profiles[PLAYER_ID] as Profile
-    const outcome = tierOutcome(tier, playerProfile.followers)
-    const resolutionText = outcomeText(rng, tier)
-
-    const nextPlayer = applyPlayerEffects(state.player, outcome.statDeltas)
-    const nextPlayerProfile: Profile = {
-      ...playerProfile,
-      followers: Math.max(0, playerProfile.followers + outcome.followerDelta),
-    }
-
-    const logEntry: ActivityLogEntry = {
-      id: makeId('log'),
-      at: Date.now(),
-      action: 'event',
-      deltas: outcome.statDeltas,
-      summary: `Event: ${encounter.text} — chose "${choice.label}". ${resolutionText}`,
-    }
-
-    set({
-      player: nextPlayer,
-      profiles: { ...state.profiles, [PLAYER_ID]: nextPlayerProfile },
-      activityLog: [...state.activityLog, logEntry],
-      activeEncounter: {
-        ...encounter,
-        resolution: { text: resolutionText, tier, statDeltas: outcome.statDeltas, followerDelta: outcome.followerDelta },
-      },
-    })
-
-    // A bad outcome can leak to the tabloids, same as a risky Activity —
-    // only when it's actually newsworthy (see coverageChance), never guaranteed.
-    if (outcome.tags.length > 0) {
-      const chance = coverageChance(outcome.tags, 3)
-      if (chance > 0 && rng() < chance) {
-        const npcs = Object.values(get().profiles).filter(isNPC)
-        const outlet = pickMediaOutlet(npcs)
-        if (outlet) triggerMediaCoverage(outlet, encounter.text, outcome.tags)
-      }
-    }
+  resolveEncounterCustom: (text) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const encounter = get().activeEncounter
+    if (!encounter || encounter.resolution || encounter.loading) return
+    // A freely-typed response carries the same variance as a "bold" choice
+    // — improvising has no built-in safety net.
+    finishEncounter({ id: 'custom', label: trimmed, risk: 'bold' })
   },
 
   dismissEncounter: () => set({ activeEncounter: null }),
 
   // Comments no longer go through this queue at all — see processComments
-  // (called directly from submitPlayerPost) — so this handles DMs (their
-  // deliberate "typing" delay, unlike the now-instant comment path) and
-  // scheduled activities starting when their startAt arrives.
+  // (called directly from submitPlayerPost) — so this is DM-only: their
+  // deliberate "typing" delay, unlike the now-instant comment path.
+  // Activities never auto-start either — see startActivity.
   tickScheduler: (now = Date.now()) => {
     const { due, remaining } = splitDueItems(get().scheduled, now)
     if (due.length === 0) return
 
-    const dueActivityIds: string[] = []
-
     set((state) => {
       let threads = state.threads
-      let activities = state.activities
       for (const item of due) {
-        if (item.kind === 'dm') {
-          const payload = item.payload as DMSchedulePayload
-          const thread = threads[payload.npcId]
-          if (!thread) continue
+        if (item.kind !== 'dm') continue
+        const payload = item.payload as DMSchedulePayload
+        const thread = threads[payload.npcId]
+        if (!thread) continue
 
-          const npcMsg: DMMessage = {
-            id: makeId('msg'),
-            from: 'npc',
-            text: payload.text,
-            at: item.dueAt,
-            origin: 'template',
-          }
-          threads = {
-            ...threads,
-            [payload.npcId]: {
-              ...thread,
-              messages: [...thread.messages, npcMsg],
-              unread: thread.unread + 1,
-            },
-          }
-        } else if (item.kind === 'activity_start') {
-          const payload = item.payload as { activityId: string }
-          const activity = activities[payload.activityId]
-          if (!activity || activity.status !== 'scheduled') continue
-          activities = { ...activities, [payload.activityId]: { ...activity, status: 'active' } }
-          dueActivityIds.push(payload.activityId)
+        const npcMsg: DMMessage = {
+          id: makeId('msg'),
+          from: 'npc',
+          text: payload.text,
+          at: item.dueAt,
+          origin: 'template',
+        }
+        threads = {
+          ...threads,
+          [payload.npcId]: {
+            ...thread,
+            messages: [...thread.messages, npcMsg],
+            unread: thread.unread + 1,
+          },
         }
       }
-      return { scheduled: remaining, threads, activities }
+      return { scheduled: remaining, threads }
     })
-
-    for (const activityId of dueActivityIds) advanceActivity(activityId, true)
   },
 
   setTheme: (theme) => set((state) => ({ settings: { ...state.settings, theme } })),

@@ -161,6 +161,7 @@ const activitySchema = z.object({
   participantIds: z.array(z.string()),
   status: z.enum(['scheduled', 'active', 'ended']),
   startAt: z.number(),
+  plannedLabel: z.string().optional(),
   createdAt: z.number(),
   messages: z.array(activityMessageSchema),
   turnCount: z.number(),

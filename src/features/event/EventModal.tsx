@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import { isNPC } from '../../types'
 import { Avatar } from '../../components/Avatar'
@@ -16,15 +17,39 @@ const STAT_LABELS: Record<string, string> = {
   aura: 'Aura',
 }
 
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1 py-2">
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:-0.3s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:-0.15s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400" />
+    </div>
+  )
+}
+
 export function EventModal({ onOpenProfile }: EventModalProps) {
   const encounter = useGameStore((s) => s.activeEncounter)
   const celeb = useGameStore((s) => (encounter?.celebId ? s.profiles[encounter.celebId] : undefined))
   const resolveEncounterChoice = useGameStore((s) => s.resolveEncounterChoice)
+  const resolveEncounterCustom = useGameStore((s) => s.resolveEncounterCustom)
   const dismissEncounter = useGameStore((s) => s.dismissEncounter)
+  const [customText, setCustomText] = useState('')
 
   if (!encounter) return null
 
   const npc = celeb && isNPC(celeb) ? celeb : undefined
+  // Four phases: generating the situation -> choices shown, awaiting a pick
+  // -> resolving the outcome -> resolved. `loading` is reused for both the
+  // situation and outcome AI calls; `choices.length` disambiguates which.
+  const isGeneratingSituation = encounter.loading && encounter.choices.length === 0 && !encounter.resolution
+  const isResolving = encounter.loading && encounter.choices.length > 0 && !encounter.resolution
+  const showChoices = !encounter.loading && !encounter.resolution
+
+  const handleCustom = () => {
+    if (!customText.trim()) return
+    resolveEncounterCustom(customText)
+    setCustomText('')
+  }
 
   return (
     <div className="absolute inset-0 z-[100] flex items-end justify-center bg-black/60 sm:items-center">
@@ -46,9 +71,15 @@ export function EventModal({ onOpenProfile }: EventModalProps) {
           </button>
         )}
 
-        <p className="mt-3 text-lg font-semibold leading-snug">{encounter.text}</p>
+        {isGeneratingSituation ? (
+          <div className="mt-4">
+            <TypingDots />
+          </div>
+        ) : (
+          <p className="mt-3 text-lg font-semibold leading-snug">{encounter.text}</p>
+        )}
 
-        {!encounter.resolution ? (
+        {showChoices && (
           <div className="mt-4 flex flex-col gap-2">
             {encounter.choices.map((choice) => (
               <button
@@ -59,8 +90,36 @@ export function EventModal({ onOpenProfile }: EventModalProps) {
                 {choice.label}
               </button>
             ))}
+
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value.slice(0, 200))}
+                onKeyDown={(e) => e.key === 'Enter' && handleCustom()}
+                placeholder="Or write your own move..."
+                className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-transparent px-3 py-2 text-sm placeholder-neutral-500 outline-none dark:border-neutral-700"
+              />
+              <button
+                onClick={handleCustom}
+                disabled={!customText.trim()}
+                className="shrink-0 cursor-pointer rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+              >
+                Go
+              </button>
+            </div>
           </div>
-        ) : (
+        )}
+
+        {isResolving && (
+          <div className="mt-4">
+            {encounter.pendingChoiceLabel && (
+              <p className="text-sm font-medium text-neutral-500">You: {encounter.pendingChoiceLabel}</p>
+            )}
+            <TypingDots />
+          </div>
+        )}
+
+        {encounter.resolution && (
           <div className="mt-4">
             <p className="text-sm text-neutral-600 dark:text-neutral-400">{encounter.resolution.text}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">

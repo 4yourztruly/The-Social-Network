@@ -3,7 +3,6 @@ import { useGameStore } from '../../store/gameStore'
 import { isNPC } from '../../types'
 import { Avatar } from '../../components/Avatar'
 import { PlusIcon, SparkleIcon } from '../../components/icons'
-import { formatRelativeTime } from '../../engine/time'
 import { CreateActivity } from './CreateActivity'
 import { ActivityChat } from './ActivityChat'
 
@@ -32,10 +31,7 @@ export function ActivityScreen({ onOpenProfile }: ActivityProps) {
     return (
       <CreateActivity
         onBack={() => setCreating(false)}
-        onCreated={(id) => {
-          setCreating(false)
-          setOpenActivityId(id)
-        }}
+        onCreated={() => setCreating(false)}
       />
     )
   }
@@ -74,7 +70,7 @@ export function ActivityScreen({ onOpenProfile }: ActivityProps) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] font-semibold">{activity.description}</p>
                 <p className="text-xs text-neutral-500">
-                  {activity.status === 'scheduled' && `Starts ${formatRelativeTime(activity.startAt)}`}
+                  {activity.status === 'scheduled' && `Not started yet${activity.plannedLabel ? ` · planned: ${activity.plannedLabel}` : ''}`}
                   {activity.status === 'active' && 'In progress'}
                   {activity.status === 'ended' && (activity.outcomeSummary ?? 'Ended')}
                 </p>

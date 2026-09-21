@@ -19,6 +19,8 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
   const aiTyping = useGameStore((s) => s.aiTyping)
   const sendActivityChoice = useGameStore((s) => s.sendActivityChoice)
   const endActivity = useGameStore((s) => s.endActivity)
+  const startActivity = useGameStore((s) => s.startActivity)
+  const deleteActivity = useGameStore((s) => s.deleteActivity)
   const [text, setText] = useState('')
 
   const participants = useMemo(
@@ -34,6 +36,11 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
     if (!value.trim() || activity.status !== 'active') return
     sendActivityChoice(activityId, value)
     setText('')
+  }
+
+  const handleDelete = () => {
+    deleteActivity(activityId)
+    onBack()
   }
 
   return (
@@ -67,14 +74,41 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
             End activity
           </button>
         )}
+        {activity.status === 'ended' && (
+          <button
+            onClick={handleDelete}
+            className="shrink-0 cursor-pointer rounded-full border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/40"
+          >
+            Delete
+          </button>
+        )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {activity.status === 'scheduled' && (
-          <p className="py-8 text-center text-sm text-neutral-500">
-            Scheduled for {new Date(activity.startAt).toLocaleString()}. It'll start automatically.
+      {activity.status === 'scheduled' && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+          <p className="text-sm text-neutral-500">
+            Not started yet{activity.plannedLabel ? ` · planned: ${activity.plannedLabel}` : ''}. Start it whenever
+            you're ready.
           </p>
-        )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => startActivity(activityId)}
+              className="cursor-pointer rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900"
+            >
+              Start activity
+            </button>
+            <button
+              onClick={handleDelete}
+              className="cursor-pointer rounded-full border border-rose-300 px-5 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/40"
+            >
+              Delete activity
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activity.status !== 'scheduled' && (
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <div className="flex flex-col gap-2">
           {activity.messages.map((m) => (
             <div key={m.id} className={`flex ${m.from === 'player' ? 'justify-end' : 'justify-start'}`}>
@@ -110,6 +144,7 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
           )}
         </div>
       </div>
+      )}
 
       {activity.status === 'active' && (
         <div className="shrink-0 border-t border-neutral-200 dark:border-neutral-800">

@@ -9,12 +9,9 @@ interface CreateActivityProps {
   onCreated: (activityId: string) => void
 }
 
-const WHEN_OPTIONS: { label: string; delayMs: number }[] = [
-  { label: 'Now', delayMs: 0 },
-  { label: 'In an hour', delayMs: 60 * 60 * 1000 },
-  { label: 'Tonight', delayMs: 6 * 60 * 60 * 1000 },
-  { label: 'Tomorrow', delayMs: 20 * 60 * 60 * 1000 },
-]
+// Purely a label on the created activity now — activities never auto-start,
+// the player always taps Start explicitly once it's created.
+const WHEN_OPTIONS = ['Now', 'In an hour', 'Tonight', 'Tomorrow']
 
 export function CreateActivity({ onBack, onCreated }: CreateActivityProps) {
   const profiles = useGameStore((s) => s.profiles)
@@ -31,7 +28,7 @@ export function CreateActivity({ onBack, onCreated }: CreateActivityProps) {
 
   const [description, setDescription] = useState('')
   const [participantIds, setParticipantIds] = useState<string[]>([])
-  const [delayMs, setDelayMs] = useState(0)
+  const [plannedLabel, setPlannedLabel] = useState(WHEN_OPTIONS[0])
   const [error, setError] = useState<string | null>(null)
 
   const toggleParticipant = (id: string) => {
@@ -43,7 +40,7 @@ export function CreateActivity({ onBack, onCreated }: CreateActivityProps) {
       setError('Describe what happens first.')
       return
     }
-    const id = createActivity({ description, participantIds, delayMs })
+    const id = createActivity({ description, participantIds, plannedLabel })
     onCreated(id)
   }
 
@@ -69,19 +66,19 @@ export function CreateActivity({ onBack, onCreated }: CreateActivityProps) {
         </label>
 
         <div className="mt-4">
-          <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">When</p>
+          <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">When (just a label — you start it yourself)</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {WHEN_OPTIONS.map((opt) => (
               <button
-                key={opt.label}
-                onClick={() => setDelayMs(opt.delayMs)}
+                key={opt}
+                onClick={() => setPlannedLabel(opt)}
                 className={`cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  delayMs === opt.delayMs
+                  plannedLabel === opt
                     ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
                     : 'border border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300'
                 }`}
               >
-                {opt.label}
+                {opt}
               </button>
             ))}
           </div>
@@ -126,7 +123,7 @@ export function CreateActivity({ onBack, onCreated }: CreateActivityProps) {
           onClick={handleCreate}
           className="mt-5 w-full cursor-pointer rounded-full bg-neutral-900 py-2.5 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900"
         >
-          {delayMs === 0 ? 'Start now' : 'Schedule activity'}
+          Create
         </button>
       </div>
     </div>

@@ -249,7 +249,8 @@ export interface Activity {
   description: string // the player's free-text setup, e.g. "Dinner date with Jamie tonight"
   participantIds: string[] // NPCs present
   status: ActivityStatus
-  startAt: number // when it starts/started; scheduled activities flip to 'active' when this passes
+  startAt: number // set at creation; purely informational now — activities never auto-start
+  plannedLabel?: string // "Now" / "Tonight" / etc, shown on the card until started
   createdAt: number
   messages: ActivityMessage[]
   turnCount: number // player choices/messages so far — caps how long a scene runs
