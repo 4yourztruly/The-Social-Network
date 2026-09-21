@@ -4,6 +4,8 @@ import { fillTemplate } from '../engine/templates/filler'
 import { mulberry32, pick, randomInt, type RNG } from '../engine/rng'
 import { makeId } from '../engine/id'
 import { isViewableProfile } from '../engine/npcTier'
+import { pushRecentLine, selectLine } from '../engine/templates/select'
+import { applyPersonalityVoice } from '../engine/voice'
 
 const PLAYER_ID = 'player'
 const GAME_START = Date.UTC(2026, 6, 1) // fixed epoch for in-game time
@@ -158,6 +160,56 @@ function seedPosts(
   return posts.sort((a, b) => b.createdAt - a.createdAt)
 }
 
+// Materializes an actual reply Post for every one of a seed post's `replies`
+// count — without this, that number was purely cosmetic (PostThread looks
+// up replies by parentId, and none ever existed for seeded posts, so
+// opening one always showed "No replies yet" no matter what it claimed).
+// Reuses the same reactionPool/selectLine/personality-voice pipeline as
+// live in-game comments, just generated synchronously in a batch. Any NPC
+// tier can reply here (unlike seedPosts/seedStories) — commenting is what
+// commenter-tier NPCs exist to do.
+function seedReplies(pack: CareerPack, rng: RNG, npcs: Record<string, NPC>, topLevelPosts: Post[]): Post[] {
+  const now = Date.now()
+  const npcList = Object.values(npcs)
+  const recentLineIdsByNpc: Record<string, string[]> = {}
+  const replies: Post[] = []
+
+  for (const parent of topLevelPosts) {
+    if (parent.replies <= 0) continue
+    const parentAuthor = npcs[parent.authorId]
+    const candidates = npcList.filter((n) => n.id !== parent.authorId)
+    if (candidates.length === 0) continue
+
+    for (let i = 0; i < parent.replies; i++) {
+      const commenter = pick(rng, candidates)
+      const linePool = pack.reactionPool[commenter.persona]
+      if (!linePool) continue
+      const recentLineIds = recentLineIdsByNpc[commenter.id] ?? commenter.recentLineIds
+      const selection = selectLine(rng, linePool, [], recentLineIds)
+      recentLineIdsByNpc[commenter.id] = pushRecentLine(recentLineIds, selection.lineId)
+      // Reaction lines are written as "reply to whoever's post this is" —
+      // {player} fills with the post's actual author, not the game's player.
+      const filled = fillTemplate(selection.line, { player: parentAuthor?.displayName ?? '', org: '' })
+      const text = applyPersonalityVoice(filled, commenter, rng)
+      const createdAt = Math.min(now, parent.createdAt + randomInt(rng, 1, 120) * 60 * 1000)
+      replies.push({
+        id: makeId('post'),
+        authorId: commenter.id,
+        kind: 'reply',
+        parentId: parent.id,
+        text,
+        tags: [],
+        createdAt,
+        likes: randomInt(rng, 0, 30),
+        reposts: 0,
+        replies: 0,
+        origin: 'template',
+      })
+    }
+  }
+  return replies
+}
+
 const STORY_TTL_MS = 24 * 60 * 60 * 1000
 
 // A handful of NPCs start with a live story, so the stories row isn't empty
@@ -223,11 +275,12 @@ export function createSeededWorld(pack: CareerPack, input: OnboardingInput, seed
   const playerProfile = createPlayerProfile(pack, input)
   const posts = seedPosts(pack, rng, npcs, 45, orgForFlavor)
   const stories = seedStories(pack, rng, npcs, 6, orgForFlavor)
+  const replies = seedReplies(pack, rng, npcs, posts)
 
   const profiles: Record<string, Profile | NPC> = { [playerProfile.id]: playerProfile, ...npcs }
   const postsRecord: Record<string, Post> = {}
   const postOrder: string[] = []
-  for (const post of [...posts, ...stories].sort((a, b) => b.createdAt - a.createdAt)) {
+  for (const post of [...posts, ...stories, ...replies].sort((a, b) => b.createdAt - a.createdAt)) {
     postsRecord[post.id] = post
     postOrder.push(post.id)
   }
