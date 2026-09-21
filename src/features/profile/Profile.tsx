@@ -184,10 +184,11 @@ interface StatBarProps {
   change?: { delta: number; reason: string }
 }
 
-// A single Humor/Aura row: emoji + label, percentage (with a colored delta
-// when it just moved), a progress bar, and a caption naming what moved it —
-// same visual language as RelationshipList's cards, just for the player's
-// own stats instead of a relationship.
+// A single Humor/Aura row: emoji + label, a progress bar with its
+// percentage to the right, and a caption naming what most recently moved
+// it (ending in the colored +/- delta) — same visual language as
+// RelationshipList's cards, just for the player's own stats instead of a
+// relationship.
 function StatBar({ emoji, label, value, change }: StatBarProps) {
   const pct = Math.max(0, Math.min(100, value))
   // Humor/Aura are 0..100 with 50 as the neutral midpoint — scale onto the
@@ -196,14 +197,19 @@ function StatBar({ emoji, label, value, change }: StatBarProps) {
   const centered = (pct - 50) * 2
   return (
     <div>
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">
-          {emoji} {label}
-        </span>
-        <span className="flex items-center gap-1.5">
-          {change && change.delta !== 0 && (
+      <span className="text-sm font-medium">
+        {emoji} {label}
+      </span>
+      <div className="mt-1.5 flex items-center gap-2">
+        <CenteredBar value={centered} className="flex-1" />
+        <span className="shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">{centered}%</span>
+      </div>
+      {change?.reason && (
+        <div className="mt-1.5 flex items-baseline gap-1 text-xs">
+          <span className="truncate text-neutral-500">{change.reason}</span>
+          {change.delta !== 0 && (
             <span
-              className={`text-xs font-semibold ${
+              className={`shrink-0 font-semibold ${
                 change.delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
               }`}
             >
@@ -211,11 +217,8 @@ function StatBar({ emoji, label, value, change }: StatBarProps) {
               {change.delta * 2}%
             </span>
           )}
-          <span className="font-semibold">{centered}%</span>
-        </span>
-      </div>
-      <CenteredBar value={centered} className="mt-1.5" />
-      {change?.reason && <p className="mt-1.5 truncate text-xs text-neutral-500">{change.reason}</p>}
+        </div>
+      )}
     </div>
   )
 }

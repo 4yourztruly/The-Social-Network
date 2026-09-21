@@ -44,9 +44,12 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
             >
               <div className="flex items-center gap-3">
                 <Avatar avatar={npc.avatar} seed={npc.id} size={36} />
-                <div className="flex min-w-0 flex-1 items-center gap-1">
-                  <span className="truncate text-sm font-semibold">{npc.displayName}</span>
-                  {npc.verified && <VerifiedBadge />}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1">
+                    <span className="truncate text-sm font-semibold">{npc.displayName}</span>
+                    {npc.verified && <VerifiedBadge />}
+                  </div>
+                  <p className="truncate text-xs text-neutral-500">@{npc.username}</p>
                 </div>
                 <ChevronRightIcon className="h-4 w-4 shrink-0 text-neutral-400" />
               </div>
@@ -57,15 +60,15 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
               </div>
 
               {change && (
-                <p className="mt-1.5 truncate text-xs text-neutral-500">
+                <div className="mt-1.5 flex items-baseline gap-1 text-xs">
+                  <span className="truncate text-neutral-500">{change.reason}</span>
                   <span
-                    className={`font-semibold ${change.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                    className={`shrink-0 font-semibold ${change.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
                   >
                     {change.delta >= 0 ? '+' : ''}
-                    {change.delta}
-                  </span>{' '}
-                  {change.reason}
-                </p>
+                    {change.delta}%
+                  </span>
+                </div>
               )}
             </button>
           )
