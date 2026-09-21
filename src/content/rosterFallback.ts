@@ -2,6 +2,7 @@ import type { CareerPack, NPCSeed } from './careers/types'
 import type { OnboardingInput } from './seed'
 import { pick, randomInt, type RNG } from '../engine/rng'
 import { makeId } from '../engine/id'
+import { dicebearAvatarUrl } from '../engine/avatarSource'
 
 // Deterministic, non-AI roster — used when the player hasn't configured an
 // AI provider, or when AI roster generation fails/times out (see
@@ -17,8 +18,6 @@ const LAST_NAMES = [
   'Okafor', 'Bellweather', 'Marsh', 'Novak', 'Quinlan', 'Ashby', 'Duarte', 'Feld', 'Osei', 'Vance',
   'Larkspur', 'Whitlock', 'Rourke', 'Santoro', 'Iversen', 'Cade', 'Monroe', 'Blackwood', 'Faraday', 'Solis',
 ]
-const FAN_PREFIXES = ['Diehard', 'True', 'Forever', 'Real', 'Loyal', 'Certified', 'Official']
-const HATER_ADJECTIVES = ['Blunt', 'Salty', 'Unfiltered', 'Honest', 'Cold Take']
 const MEME_NAMES = ['Daily Meme Vault', 'Locker Room Leaks', 'Unofficial Highlights', 'Chaos Timeline']
 const NEWS_TEMPLATES = ['{org} Daily', 'The {org} Wire', '{org} Report', 'Inside {org}']
 const TABLOID_TEMPLATES = ['The Velvet Rope', 'Backstage Files', 'After Hours Report', 'The Insider Scoop']
@@ -35,7 +34,17 @@ function slug(...parts: string[]): string {
     .slice(0, 24)
 }
 
-function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle'>, rng: RNG): NPCSeed {
+// A realistic-looking handle a real person might actually pick — never a
+// literal label like "hater" or "fan" baked in (that reads as a role tag,
+// not a real username).
+function randomHandle(first: string, last: string, rng: RNG): string {
+  const f = first.toLowerCase()
+  const l = last.toLowerCase()
+  const patterns = [`${f}${l}`, `${f}.${l}`, `${f}_${l}`, `${f}${randomInt(rng, 1, 99)}`, `${f[0]}${l}`, `${f}.${l[0]}`]
+  return slug(pick(rng, patterns))
+}
+
+function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle' | 'avatar'>, rng: RNG): NPCSeed {
   return {
     id: makeId('npc'),
     postingStyle: {
@@ -43,6 +52,9 @@ function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle'>, rng: RNG): NPCS
       caps: Math.round(rng() * 10) / 10,
       hashtags: Math.round(rng() * 10) / 10,
     },
+    // Illustrated, never a real photo — nobody in this pool is a real
+    // person (see the file header comment).
+    avatar: { kind: 'webp', value: dicebearAvatarUrl(partial.username) },
     ...partial,
   }
 }
@@ -112,16 +124,16 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
       )
       continue
     }
+    // Ordinary people, not role-labeled accounts — the fan/hater flavor
+    // lives in the bio and personality, never in the display name or handle.
     const { first, last } = randomName(rng)
     const isHater = persona === 'hater'
-    const label = isHater ? pick(rng, HATER_ADJECTIVES) : pick(rng, FAN_PREFIXES)
-    const displayName = isHater ? `${label} ${first}` : `${label} ${orgForFlavor} Fan`
     npcs.push(
       makeSeed(
         {
-          username: slug(first, last, String(i)),
-          displayName,
-          bio: isHater ? "Someone has to say it." : `Supporting ${orgForFlavor} through everything.`,
+          username: randomHandle(first, last, rng),
+          displayName: `${first} ${last}`,
+          bio: isHater ? 'Someone has to say it.' : `Supporting ${orgForFlavor} through everything.`,
           persona,
           personality: isHater ? ['blunt', 'contrarian'] : ['passionate', 'optimistic'],
           verified: false,
@@ -147,7 +159,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
     npcs.push(
       makeSeed(
         {
-          username: slug(first, last),
+          username: randomHandle(first, last, rng),
           displayName,
           bio: bioByPersona[persona],
           persona,

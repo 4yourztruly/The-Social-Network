@@ -25,6 +25,8 @@ import {
   defaultWorldSettings,
   initialsFor,
   PLAYER_ID,
+  seedDailyPosts,
+  seedReplies,
   type OnboardingInput,
 } from '../content/seed'
 import { inferPersonaFromBio } from '../engine/personaInference'
@@ -57,10 +59,12 @@ import { pushRecentLine, selectLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
 import {
   ACTIVITY_CHOICES,
+  computeRsvp,
   coverageChance,
   pickMediaOutlet,
   templatedActivityBeat,
   templatedActivityOpening,
+  type RsvpDecision,
 } from '../engine/activity'
 import {
   outcomeText,
@@ -120,6 +124,11 @@ const BOOTSTRAP_INPUT: OnboardingInput = {
 
 export interface GameState {
   clock: number
+  // In-game "Day" counter shown in the header — advances on player actions
+  // (a post, starting an activity, a random event triggering), not on real
+  // wall-clock time. Each advance also drops a small batch of fresh NPC
+  // posts into the feed — see advanceDay().
+  gameDay: number
   player: PlayerState
   profiles: Record<string, Profile | NPC>
   posts: Record<string, Post>
@@ -216,10 +225,41 @@ function buildInitialState(input: OnboardingInput, npcSeeds?: NPCSeed[]) {
     (p) => isNPC(p) && p.followedByPlayer,
   ).length
   ;(world.profiles[PLAYER_ID] as Profile).following = followingCount
-  return world
+  return { ...world, gameDay: 1 }
 }
 
+// New posts dropped into the feed each time the day advances.
+const DAILY_POST_COUNT = 8
+
 export const useGameStore = create<GameState>((set, get) => {
+  // Advances the in-game "Day" counter and drops a fresh batch of NPC posts
+  // (plus their replies) into the feed — called whenever the player does
+  // something that "counts as a day": posting, starting an activity, or a
+  // random event firing. Not tied to real wall-clock time at all.
+  function advanceDay() {
+    set((state) => {
+      const pack = CAREER_PACKS[state.player.career]
+      const npcs: Record<string, NPC> = {}
+      for (const profile of Object.values(state.profiles)) {
+        if (isNPC(profile)) npcs[profile.id] = profile
+      }
+      const rng = mulberry32(hashStringToSeed(`day_${state.gameDay}_${state.clock}_${Object.keys(state.posts).length}`))
+      const orgForFlavor = state.player.club || pack.worldName
+      const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor)
+      const dailyReplies = seedReplies(pack, rng, npcs, dailyPosts, orgForFlavor)
+      const newItems = [...dailyPosts, ...dailyReplies].sort((a, b) => b.createdAt - a.createdAt)
+
+      const posts = { ...state.posts }
+      for (const post of newItems) posts[post.id] = post
+
+      return {
+        gameDay: state.gameDay + 1,
+        posts,
+        postOrder: [...newItems.map((p) => p.id), ...state.postOrder],
+      }
+    })
+  }
+
   // Materializes an NPC's DM reply into its thread — shared by the
   // deterministic scheduler path (tickScheduler) and the AI path (which
   // resolves later, asynchronously, once the network call finishes).
@@ -410,7 +450,11 @@ export const useGameStore = create<GameState>((set, get) => {
     const state = get()
     const activity = state.activities[activityId]
     if (!activity) return
+    // Declined RSVPs (see startActivity) don't take part in the scene —
+    // undefined (no rsvps computed, e.g. an activity from before this
+    // feature existed) means "include them", same as always.
     const participants = activity.participantIds
+      .filter((id) => activity.rsvps?.[id] !== 'declined')
       .map((id) => state.profiles[id])
       .filter((p): p is NPC => !!p && isNPC(p))
     const playerProfile = state.profiles[PLAYER_ID] as Profile
@@ -1052,6 +1096,7 @@ export const useGameStore = create<GameState>((set, get) => {
     // trickling in through the scheduled-item/tick mechanism (which is
     // still used for DMs' deliberate typing delay).
     processComments(commentItems)
+    advanceDay()
 
     return {
       postId: post.id,
@@ -1156,9 +1201,17 @@ export const useGameStore = create<GameState>((set, get) => {
   startActivity: (activityId) => {
     const activity = get().activities[activityId]
     if (!activity || activity.status !== 'scheduled') return
+    const state = get()
+    const rng = mulberry32(hashStringToSeed(`${activityId}_rsvp`))
+    const rsvps: Record<string, RsvpDecision> = {}
+    for (const npcId of activity.participantIds) {
+      const npc = state.profiles[npcId]
+      if (npc && isNPC(npc)) rsvps[npcId] = computeRsvp(npc, rng)
+    }
     set((s) => ({
-      activities: { ...s.activities, [activityId]: { ...activity, status: 'active' } },
+      activities: { ...s.activities, [activityId]: { ...activity, status: 'active', rsvps } },
     }))
+    advanceDay()
     advanceActivity(activityId, true)
   },
 
@@ -1291,6 +1344,7 @@ export const useGameStore = create<GameState>((set, get) => {
     const config = state.settings.aiEnabled ? getProviderConfig(state.settings.activeProviderId) : undefined
     const aiOk = !!config && canSpend(config.id, config.rpdBudget)
     recordEventTriggered()
+    advanceDay()
 
     if (!aiOk) {
       set({
@@ -1401,6 +1455,7 @@ export const useGameStore = create<GameState>((set, get) => {
   hydrateFromSave: (save) => {
     set({
       clock: save.clock,
+      gameDay: save.gameDay ?? 1,
       player: save.player,
       profiles: save.profiles,
       posts: save.posts,
@@ -1448,6 +1503,7 @@ export const useGameStore = create<GameState>((set, get) => {
     return {
       version: SAVE_VERSION,
       clock: state.clock,
+      gameDay: state.gameDay,
       player: state.player,
       profiles: state.profiles,
       posts: state.posts,

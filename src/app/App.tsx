@@ -32,9 +32,8 @@ export default function App() {
   useSchedulerTick()
 
   const onboarded = useGameStore((s) => s.onboarded)
-  const clock = useGameStore((s) => s.clock)
+  const dayNumber = useGameStore((s) => s.gameDay)
   const profiles = useGameStore((s) => s.profiles)
-  const dayNumber = Math.max(1, Math.floor((Date.now() - clock) / (24 * 60 * 60 * 1000)) + 1)
 
   const [screen, setScreen] = useState<Screen>('feed')
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null)

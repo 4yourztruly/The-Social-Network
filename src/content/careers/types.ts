@@ -18,8 +18,19 @@ export interface ReactionPool {
 
 export type NPCSeed = Pick<
   NPC,
-  'id' | 'username' | 'displayName' | 'bio' | 'persona' | 'personality' | 'verified' | 'followers' | 'following' | 'postingStyle'
->
+  | 'id'
+  | 'username'
+  | 'displayName'
+  | 'bio'
+  | 'persona'
+  | 'personality'
+  | 'verified'
+  | 'followers'
+  | 'following'
+  | 'postingStyle'
+> & {
+  avatar?: NPC['avatar'] // omitted for the static per-career packs — falls back to initials
+}
 
 export interface CareerPack {
   id: 'footballer' | 'rapper' | 'singer' | 'baseball_player'

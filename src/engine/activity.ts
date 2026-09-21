@@ -64,6 +64,25 @@ export function pickMediaOutlet(npcs: readonly NPC[]): NPC | null {
   return null
 }
 
+export type RsvpDecision = 'accepted' | 'declined'
+
+// Relationship (-100..100) is the dominant factor in whether an invited NPC
+// actually shows up; a few personality traits nudge it further. Never fully
+// certain either way — even a close friend can flake, even a rival might
+// show just to see what happens.
+const RSVP_POSITIVE_TRAITS = ['loyal', 'passionate', 'optimistic', 'mentor', 'discreet', 'confident', 'thorough']
+const RSVP_NEGATIVE_TRAITS = ['blunt', 'contrarian', 'cocky', 'sarcastic', 'irreverent']
+
+export function computeRsvp(npc: NPC, rng: RNG): RsvpDecision {
+  let chance = 0.5 + npc.relationship / 200 // -100..100 -> -0.5..+0.5
+  for (const trait of npc.personality) {
+    if (RSVP_POSITIVE_TRAITS.includes(trait)) chance += 0.08
+    if (RSVP_NEGATIVE_TRAITS.includes(trait)) chance -= 0.08
+  }
+  chance = Math.min(0.95, Math.max(0.05, chance))
+  return rng() < chance ? 'accepted' : 'declined'
+}
+
 // 0 when nothing newsworthy happened; otherwise a base chance that climbs
 // with how risky the activity was and how long it ran, capped well under
 // certain so a leak is never guaranteed.

@@ -22,6 +22,8 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
   const deleteActivity = useGameStore((s) => s.deleteActivity)
   const [text, setText] = useState('')
 
+  const [rsvpAcknowledged, setRsvpAcknowledged] = useState(false)
+
   const participants = useMemo(
     () => (activity?.participantIds ?? []).map((id) => profiles[id]).filter(isNPC),
     [activity?.participantIds, profiles],
@@ -40,6 +42,70 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
   const handleDelete = () => {
     deleteActivity(activityId)
     onBack()
+  }
+
+  // Right after Start, who actually showed up — see engine/activity.ts
+  // computeRsvp and store.startActivity. Only shown once per visit to this
+  // screen; "Continue" moves into the scene itself.
+  if (activity.status === 'active' && activity.rsvps && !rsvpAcknowledged) {
+    const accepted = participants.filter((p) => activity.rsvps?.[p.id] === 'accepted')
+    const declined = participants.filter((p) => activity.rsvps?.[p.id] === 'declined')
+    return (
+      <div className="flex h-full flex-col">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
+          <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+            <ArrowLeftIcon className="h-5 w-5" />
+          </button>
+          <p className="truncate text-[15px] font-semibold">{activity.description}</p>
+        </div>
+
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
+          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Who showed up</p>
+
+          {participants.length === 0 && <p className="text-sm text-neutral-500">Flying solo this time.</p>}
+
+          {accepted.length > 0 && (
+            <div className="w-full max-w-xs">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                Accepted
+              </p>
+              <div className="mt-2 flex flex-col gap-2">
+                {accepted.map((npc) => (
+                  <div key={npc.id} className="flex items-center gap-2 rounded-xl border border-neutral-200 p-2 dark:border-neutral-800">
+                    <Avatar avatar={npc.avatar} seed={npc.id} size={32} />
+                    <span className="text-sm font-medium">{npc.displayName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {declined.length > 0 && (
+            <div className="w-full max-w-xs">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Couldn't make it</p>
+              <div className="mt-2 flex flex-col gap-2">
+                {declined.map((npc) => (
+                  <div
+                    key={npc.id}
+                    className="flex items-center gap-2 rounded-xl border border-neutral-200 p-2 opacity-60 dark:border-neutral-800"
+                  >
+                    <Avatar avatar={npc.avatar} seed={npc.id} size={32} />
+                    <span className="text-sm font-medium">{npc.displayName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setRsvpAcknowledged(true)}
+            className="mt-2 cursor-pointer rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

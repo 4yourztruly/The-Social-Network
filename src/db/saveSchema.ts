@@ -172,11 +172,13 @@ const activitySchema = z.object({
   endedAt: z.number().optional(),
   outcomeSummary: z.string().optional(),
   pendingChoices: z.array(z.string()).default([]),
+  rsvps: z.record(z.string(), z.enum(['accepted', 'declined'])).optional(),
 })
 
 export const saveGameSchema = z.object({
   version: z.number(),
   clock: z.number(),
+  gameDay: z.number().int().positive().default(1),
   player: playerStateSchema,
   // npcSchema first: it's the strictly larger/more specific shape, so trying
   // it first (on top of profileSchema now being .strict()) means an NPC

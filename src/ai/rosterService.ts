@@ -5,6 +5,7 @@ import type { OnboardingInput } from '../content/seed'
 import { createOpenAICompatibleProvider, AIRequestError } from './openaiCompatible'
 import { npcSeedSchema } from '../content/schemas'
 import { makeId } from '../engine/id'
+import { dicebearAvatarUrl, fetchWikipediaThumbnail } from '../engine/avatarSource'
 
 const REQUEST_TIMEOUT_MS = 25_000
 const MAX_TOKENS = 3200
@@ -29,6 +30,12 @@ export interface GenerateRosterArgs {
   config: AIProviderConfig
 }
 
+const CELEB_PERSONAS: NPCSeed['persona'][] = ['teammate', 'coach', 'agent', 'rival']
+
+function isCelebPersona(persona: NPCSeed['persona']): boolean {
+  return CELEB_PERSONAS.includes(persona)
+}
+
 function clampFollowers(persona: NPCSeed['persona'], value: number): number {
   const isMedia = persona === 'match_reporter' || persona === 'insider' || persona === 'tabloid'
   const isCommenter = persona === 'loyal_fan' || persona === 'hater' || persona === 'meme_account'
@@ -47,10 +54,10 @@ export function buildRosterSystemPrompt(pack: CareerPack): string {
       '"personality": array of 1-3 short lowercase trait words, "verified": boolean, "followers": integer, "following": integer, ' +
       '"postingStyle": { "emoji": number 0-1, "caps": number 0-1, "hashtags": number 0-1 } }',
     '',
-    `Produce exactly ${NEWS_COUNT} accounts with persona "match_reporter" (real or real-feeling news outlets covering this world).`,
-    `Produce exactly ${TABLOID_COUNT} accounts with persona "tabloid" (gossip/tabloid outlets).`,
-    `Produce ${NPC_COUNT} accounts split across personas "loyal_fan", "hater", and "meme_account" — these are ordinary fans/commenters, not celebrities. Give them realistic-feeling but NOT real usernames/names appropriate to this world — invented people, not real individuals.`,
-    `Produce ${CELEB_COUNT} accounts split across personas "teammate", "coach", "agent", and "rival" — these ARE real, currently-known public figures. 2-5 of them should be genuinely related to the player's own subject/field (e.g. real teammates, rivals, coaches, agents in their sport/industry). The rest should be real, famous women from OTHER fields entirely (music, acting, other sports, etc.) for variety — use their real names.`,
+    `Produce exactly ${NEWS_COUNT} accounts with persona "match_reporter" (real, well-known news outlets covering this world) — use their REAL handle/username (e.g. an outlet's actual X/Instagram handle).`,
+    `Produce exactly ${TABLOID_COUNT} accounts with persona "tabloid" (real gossip/tabloid outlets) — use their REAL handle/username too.`,
+    `Produce ${NPC_COUNT} accounts split across personas "loyal_fan", "hater", and "meme_account" — these are ordinary fans/commenters, not celebrities, and not real people. Give each one a realistic human display name (first + last, like a real person would use) and a realistic-looking handle a real person would actually pick (e.g. "jmarsh22", "kayleigh.b", "d_ashby") — never literally spell out their role in the name or handle (no "Fan", "Hater", "TrueFan", etc. baked into displayName or username).`,
+    `Produce ${CELEB_COUNT} accounts split across personas "teammate", "coach", "agent", and "rival" — these ARE real, currently-known public figures. 2-5 of them should be genuinely related to the player's own subject/field (e.g. real teammates, rivals, coaches, agents in their sport/industry). The rest should be real, famous women from OTHER fields entirely (music, acting, other sports, etc.) for variety. Use each person's REAL name and their REAL, actual social media handle/username where you know it — not an invented one.`,
     '',
     'Follower counts should roughly reflect real-world fame for celebs/media, and small realistic numbers for ordinary fan/commenter accounts.',
     "The player's own bio is the ONLY source of truth for what their world/subject is — never invent a club, sport, or genre beyond what they wrote.",
@@ -95,12 +102,25 @@ export async function generateRoster(args: GenerateRosterArgs): Promise<NPCSeed[
       signal: controller.signal,
     })
     const parsed = rosterResponseSchema.parse(extractJsonArray(text))
-    return parsed.map((entry) => ({
+    const cleaned = parsed.map((entry) => ({
       ...entry,
       id: makeId('npc'),
       username: entry.username.replace(/^@/, '').replace(/\s+/g, '').slice(0, 24),
       followers: clampFollowers(entry.persona, entry.followers),
       following: Math.max(0, Math.round(entry.following)),
+    }))
+
+    // Celebs/media are asked for real people/outlets — try their actual
+    // Wikipedia photo. NPCs are invented, so they always get an illustrated
+    // avatar instead (never a real photo, since they aren't real people).
+    // Run every lookup in parallel — sequential would be 20+ round trips.
+    const avatars = await Promise.all(
+      cleaned.map((entry) => (isCelebPersona(entry.persona) ? fetchWikipediaThumbnail(entry.displayName) : Promise.resolve(null))),
+    )
+
+    return cleaned.map((entry, i) => ({
+      ...entry,
+      avatar: { kind: 'webp' as const, value: avatars[i] ?? dicebearAvatarUrl(entry.username) },
     }))
   } catch (err) {
     if (import.meta.env.DEV) {

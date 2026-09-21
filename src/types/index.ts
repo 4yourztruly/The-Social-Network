@@ -268,11 +268,16 @@ export interface Activity {
   // refreshed after every narrator beat (see advanceActivity). Player can
   // always ignore these and type their own move instead.
   pendingChoices: string[]
+  // Computed once when the player taps Start (see engine/activity.ts
+  // computeRsvp) — who actually showed up. Only accepted participants take
+  // part in the scene; declined ones stay invited but silent.
+  rsvps?: Record<string, 'accepted' | 'declined'>
 }
 
 export interface SaveGame {
   version: number // for migrations
   clock: number
+  gameDay: number // in-game "Day" counter — see GameState.gameDay
   player: PlayerState
   profiles: Record<string, Profile | NPC>
   posts: Record<string, Post>

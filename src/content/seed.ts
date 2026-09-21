@@ -82,7 +82,7 @@ function createNpcProfiles(npcSeeds: NPCSeed[], pack: CareerPack, rng: RNG, orgF
       username: seed.username,
       displayName: seed.displayName,
       bio: seed.bio.split(pack.worldName).join(orgForFlavor),
-      avatar: { kind: 'initials', value: initialsFor(seed.displayName) },
+      avatar: seed.avatar ?? { kind: 'initials', value: initialsFor(seed.displayName) },
       verified: seed.verified,
       followers: seed.followers,
       following: seed.following,
@@ -110,20 +110,11 @@ export function initialsFor(name: string): string {
     .toUpperCase()
 }
 
-function startingRelationship(persona: NPC['persona'], rng: RNG): number {
-  switch (persona) {
-    case 'teammate':
-    case 'coach':
-    case 'agent':
-      return randomInt(rng, 20, 50)
-    case 'loyal_fan':
-      return randomInt(rng, 40, 70)
-    case 'rival':
-    case 'hater':
-      return randomInt(rng, -50, -10)
-    default:
-      return randomInt(rng, -10, 20)
-  }
+// Every relationship starts neutral (0%) — nobody begins already liking or
+// disliking the player, regardless of persona. It only moves from actual
+// interactions (posts, replies, DMs, activities) from there.
+function startingRelationship(_persona: NPC['persona'], _rng: RNG): number {
+  return 0
 }
 
 function seedPosts(
@@ -163,6 +154,42 @@ function seedPosts(
   return posts.sort((a, b) => b.createdAt - a.createdAt)
 }
 
+// Same idea as seedPosts, but for a live game already in progress — a small,
+// recent batch (a couple minutes to a few hours old, not up to 60h) dropped
+// into the feed each time the in-game day advances (see gameStore.advanceDay).
+export function seedDailyPosts(
+  pack: CareerPack,
+  rng: RNG,
+  npcs: Record<string, NPC>,
+  count: number,
+  orgForFlavor: string,
+): Post[] {
+  const now = Date.now()
+  const npcList = Object.values(npcs)
+  const posts: Post[] = []
+  for (let i = 0; i < count; i++) {
+    const author = pick(rng, npcList)
+    const lines = pack.seedPostPool[author.persona]
+    if (!lines || lines.length === 0) continue
+    const line = pick(rng, lines)
+    const text = fillTemplate(line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
+    const ageMs = randomInt(rng, 1, 180) * 60 * 1000 // 1 min to 3h ago
+    posts.push({
+      id: makeId('post'),
+      authorId: author.id,
+      kind: 'post',
+      text,
+      tags: [],
+      createdAt: now - ageMs,
+      likes: randomInt(rng, 0, Math.round(author.followers / 4000)),
+      reposts: randomInt(rng, 0, Math.round(author.followers / 12000)),
+      replies: randomInt(rng, 0, 15),
+      origin: 'template',
+    })
+  }
+  return posts.sort((a, b) => b.createdAt - a.createdAt)
+}
+
 // A commenter who replies at all only does so 1-3 times per thread — caps
 // how many of a post's `replies` slots any single NPC can fill, so one
 // account doesn't dominate the comment section.
@@ -182,7 +209,7 @@ const MENTION_REPLY_CHANCE = 0.35
 // live in-game comments, just generated synchronously in a batch. Any NPC
 // tier can reply here (unlike seedPosts/seedStories) — commenting is what
 // commenter-tier NPCs exist to do.
-function seedReplies(
+export function seedReplies(
   pack: CareerPack,
   rng: RNG,
   npcs: Record<string, NPC>,
