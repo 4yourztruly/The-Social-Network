@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useGameStore, PLAYER_ID } from '../../store/gameStore'
 import { isNPC } from '../../types'
+import { isDmAvailable } from '../../engine/npcTier'
 import { Avatar } from '../../components/Avatar'
 import { gradientCssFor } from '../../components/avatarColors'
 import { shortNameFor } from '../../components/shortName'
@@ -130,7 +131,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
           <p className="text-center text-2xl font-semibold leading-snug drop-shadow">{story.text}</p>
         </div>
 
-        {authorId !== PLAYER_ID && isNPC(author) && (
+        {authorId !== PLAYER_ID && isNPC(author) && isDmAvailable(author) && (
           <div className="flex items-center gap-2 px-3 pb-4">
             <input
               value={replyText}

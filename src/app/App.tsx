@@ -23,6 +23,8 @@ import { EventModal } from '../features/event/EventModal'
 import { PLAYER_ID, useGameStore, type PostOutcome } from '../store/gameStore'
 import { PeopleIcon } from '../components/icons'
 import { OutcomeBanner } from '../components/OutcomeBanner'
+import { isNPC } from '../types'
+import { isViewableProfile } from '../engine/npcTier'
 
 export default function App() {
   useTheme()
@@ -31,6 +33,7 @@ export default function App() {
 
   const onboarded = useGameStore((s) => s.onboarded)
   const clock = useGameStore((s) => s.clock)
+  const profiles = useGameStore((s) => s.profiles)
   const dayNumber = Math.max(1, Math.floor((Date.now() - clock) / (24 * 60 * 60 * 1000)) + 1)
 
   const [screen, setScreen] = useState<Screen>('feed')
@@ -59,7 +62,15 @@ export default function App() {
   // navigating to a new one must clear whichever overlay is currently
   // active — otherwise the state updates but the old overlay keeps
   // rendering on top of it and the navigation silently does nothing.
+  //
+  // Commenter-tier NPCs (the general public — see engine/npcTier.ts) have
+  // no viewable profile at all: they only ever comment/reply. Every profile
+  // navigation in the app funnels through this one handler, so gating it
+  // here is enough — no need to also disable the click affordance in every
+  // individual component that renders an author name/avatar.
   const handleOpenProfile = (profileId: string) => {
+    const target = profiles[profileId]
+    if (target && isNPC(target) && !isViewableProfile(target)) return
     setViewingPostId(null)
     setViewingDmNpcId(null)
     setShowPeople(false)

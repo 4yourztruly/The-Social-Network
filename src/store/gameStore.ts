@@ -28,6 +28,7 @@ import {
   type OnboardingInput,
 } from '../content/seed'
 import { inferPersonaFromBio } from '../engine/personaInference'
+import { isDmAvailable, isFollowable, isViewableProfile, tierForPersona } from '../engine/npcTier'
 import { CAREER_PACKS } from '../content/careers'
 import { isNPC } from '../types'
 import { makeId } from '../engine/id'
@@ -650,7 +651,7 @@ export const useGameStore = create<GameState>((set, get) => {
   followNpc: (npcId) => {
     set((state) => {
       const npc = state.profiles[npcId]
-      if (!npc || !isNPC(npc) || npc.followedByPlayer) return state
+      if (!npc || !isNPC(npc) || npc.followedByPlayer || !isFollowable(npc)) return state
       const player = state.profiles[PLAYER_ID]
       return {
         profiles: {
@@ -736,7 +737,11 @@ export const useGameStore = create<GameState>((set, get) => {
       mood: 0,
       postingStyle: { emoji: 0.4, caps: 0.1, hashtags: 0.1 },
       recentLineIds: [],
-      followedByPlayer: true,
+      // Only celebs are followable at all (see engine/npcTier.ts) — a
+      // commenter- or media-tier custom person is added to the roster but
+      // never auto-followed, since the player couldn't follow them via the
+      // UI either.
+      followedByPlayer: tierForPersona(persona) === 'celeb',
       custom: true,
     }
 
@@ -746,9 +751,10 @@ export const useGameStore = create<GameState>((set, get) => {
       const followingCount = Object.values(profiles).filter((p) => isNPC(p) && p.followedByPlayer).length
 
       // Give them one live story right away, in the same voice/content pool
-      // as the rest of the roster — reuses seedPostPool, no new content needed.
+      // as the rest of the roster — reuses seedPostPool, no new content
+      // needed. Commenter-tier people never author their own posts/stories.
       const pack = CAREER_PACKS[state.player.career]
-      const lines = pack.seedPostPool[persona]
+      const lines = isViewableProfile(npc) ? pack.seedPostPool[persona] : undefined
       let posts = state.posts
       let postOrder = state.postOrder
       if (lines && lines.length > 0) {
@@ -1031,7 +1037,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
     set((state) => {
       const npc = state.profiles[npcId]
-      if (!npc || !isNPC(npc)) return state
+      if (!npc || !isNPC(npc) || !isDmAvailable(npc)) return state
       const playerMsg: DMMessage = { id: makeId('msg'), from: 'player', text: trimmed, at: now, origin: 'player' }
       const existing = state.threads[npcId]
       const thread: DMThread = existing
@@ -1042,7 +1048,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
     const state = get()
     const npc = state.profiles[npcId]
-    if (!npc || !isNPC(npc)) return
+    if (!npc || !isNPC(npc) || !isDmAvailable(npc)) return
 
     // AI is only ever used when explicitly enabled, a provider is
     // configured (key lives in localStorage — never in this state), and

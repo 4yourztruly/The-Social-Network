@@ -9,6 +9,7 @@ import { PostCard } from '../../components/PostCard'
 import { RelationshipMeter } from '../../components/RelationshipMeter'
 import { RelationshipList } from '../../components/RelationshipList'
 import { EditProfile } from './EditProfile'
+import { isDmAvailable, isFollowable } from '../../engine/npcTier'
 import { ArrowLeftIcon, MailIcon, SettingsIcon } from '../../components/icons'
 
 interface ProfileProps {
@@ -92,7 +93,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
           </div>
           {npc && (
             <div className="mb-2 flex translate-y-1.5 gap-3">
-              {onOpenDM && (
+              {onOpenDM && isDmAvailable(npc) && (
                 <button
                   onClick={() => onOpenDM(npc.id)}
                   className="flex items-center gap-1.5 rounded-full border border-neutral-300 px-4 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-800"
@@ -101,16 +102,18 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
                   Message
                 </button>
               )}
-              <button
-                onClick={() => (npc.followedByPlayer ? unfollowNpc(npc.id) : followNpc(npc.id))}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                  npc.followedByPlayer
-                    ? 'border border-neutral-300 text-neutral-900 hover:border-rose-400 hover:bg-rose-50 hover:text-rose-600 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-rose-950/40'
-                    : 'bg-neutral-900 text-white hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200'
-                }`}
-              >
-                {npc.followedByPlayer ? 'Following' : 'Follow'}
-              </button>
+              {isFollowable(npc) && (
+                <button
+                  onClick={() => (npc.followedByPlayer ? unfollowNpc(npc.id) : followNpc(npc.id))}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    npc.followedByPlayer
+                      ? 'border border-neutral-300 text-neutral-900 hover:border-rose-400 hover:bg-rose-50 hover:text-rose-600 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-rose-950/40'
+                      : 'bg-neutral-900 text-white hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200'
+                  }`}
+                >
+                  {npc.followedByPlayer ? 'Following' : 'Follow'}
+                </button>
+              )}
             </div>
           )}
           {profile.isPlayer && (
@@ -152,7 +155,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
           )}
         </div>
 
-        {npc && <RelationshipMeter relationship={npc.relationship} vibe={npc.vibe} />}
+        {npc && isFollowable(npc) && <RelationshipMeter relationship={npc.relationship} vibe={npc.vibe} />}
       </div>
 
       <div className="mt-4 flex border-b border-neutral-200 text-sm font-medium dark:border-neutral-800">

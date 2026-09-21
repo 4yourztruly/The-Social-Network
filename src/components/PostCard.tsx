@@ -5,6 +5,8 @@ import { VerifiedBadge } from './VerifiedBadge'
 import { formatRelativeTime } from '../engine/time'
 import { HeartIcon, ReplyIcon, RepostIcon, StarIcon } from './icons'
 import { PostText } from './PostText'
+import { isNPC } from '../types'
+import { isViewableProfile } from '../engine/npcTier'
 
 interface PostCardProps {
   postId: string
@@ -50,6 +52,11 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
 
   if (!post || !author) return null
 
+  // Commenter-tier NPCs (the general public) have no viewable profile —
+  // see engine/npcTier.ts. Their name/avatar render as plain text instead
+  // of a dead-end button that looks clickable but does nothing.
+  const profileViewable = !isNPC(author) || isViewableProfile(author)
+
   return (
     <article
       onClick={onOpenThread ? handleOpenThread : undefined}
@@ -62,17 +69,29 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
         onOpenThread ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/60' : ''
       }`}
     >
-      <button onClick={handleOpenProfileStopped} className="shrink-0 cursor-pointer">
-        <Avatar avatar={author.avatar} seed={author.id} />
-      </button>
+      {profileViewable ? (
+        <button onClick={handleOpenProfileStopped} className="shrink-0 cursor-pointer">
+          <Avatar avatar={author.avatar} seed={author.id} />
+        </button>
+      ) : (
+        <div className="shrink-0">
+          <Avatar avatar={author.avatar} seed={author.id} />
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1 text-[15px]">
-          <button
-            onClick={handleOpenProfileStopped}
-            className="cursor-pointer truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
-          >
-            {author.displayName}
-          </button>
+          {profileViewable ? (
+            <button
+              onClick={handleOpenProfileStopped}
+              className="cursor-pointer truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+            >
+              {author.displayName}
+            </button>
+          ) : (
+            <span className="truncate font-semibold text-neutral-900 dark:text-neutral-100">
+              {author.displayName}
+            </span>
+          )}
           {author.verified && <VerifiedBadge />}
           <span className="truncate text-neutral-500">@{author.username}</span>
           <span className="text-neutral-500">·</span>

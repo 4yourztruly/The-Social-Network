@@ -3,6 +3,7 @@ import type { CareerPack } from './careers/types'
 import { fillTemplate } from '../engine/templates/filler'
 import { mulberry32, pick, randomInt, type RNG } from '../engine/rng'
 import { makeId } from '../engine/id'
+import { isViewableProfile } from '../engine/npcTier'
 
 const PLAYER_ID = 'player'
 const GAME_START = Date.UTC(2026, 6, 1) // fixed epoch for in-game time
@@ -130,7 +131,9 @@ function seedPosts(
   orgForFlavor: string,
 ): Post[] {
   const now = Date.now()
-  const npcList = Object.values(npcs)
+  // Commenter-tier NPCs (the general public — see engine/npcTier.ts) only
+  // ever comment/reply, never author their own top-level posts.
+  const npcList = Object.values(npcs).filter(isViewableProfile)
   const posts: Post[] = []
   for (let i = 0; i < count; i++) {
     const author = pick(rng, npcList)
@@ -169,7 +172,7 @@ function seedStories(
   orgForFlavor: string,
 ): Post[] {
   const now = Date.now()
-  const npcList = Object.values(npcs)
+  const npcList = Object.values(npcs).filter(isViewableProfile)
   const chosen = new Set<string>()
   const stories: Post[] = []
   for (let i = 0; i < count * 3 && chosen.size < count && chosen.size < npcList.length; i++) {
