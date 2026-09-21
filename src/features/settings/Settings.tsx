@@ -3,34 +3,12 @@ import { useGameStore } from '../../store/gameStore'
 import { downloadSaveFile, parseSaveJSON, persistNow } from '../../db/persistence'
 import { ArrowLeftIcon, TrashIcon } from '../../components/icons'
 import { Avatar } from '../../components/Avatar'
+import { fileToAvatarDataUrl } from '../../components/imageUpload'
 import { PROVIDER_PRESETS, presetById, isModelIdAllowed } from '../../ai/presets'
 import { getProviderConfig, upsertProviderConfig, removeProviderConfig } from '../../ai/keyStorage'
 import { usageToday } from '../../ai/budget'
 import { createOpenAICompatibleProvider, AIRequestError } from '../../ai/openaiCompatible'
-import { isNPC, type AIProviderConfig, type Persona, type RelationshipVibe } from '../../types'
-
-const PERSONA_OPTIONS: { value: Persona; label: string }[] = [
-  { value: 'loyal_fan', label: 'Loyal fan' },
-  { value: 'hater', label: 'Hater' },
-  { value: 'rival', label: 'Rival' },
-  { value: 'teammate', label: 'Teammate' },
-  { value: 'coach', label: 'Coach' },
-  { value: 'agent', label: 'Agent' },
-  { value: 'meme_account', label: 'Meme account' },
-  { value: 'match_reporter', label: 'Reporter' },
-  { value: 'insider', label: 'Insider' },
-  { value: 'tabloid', label: 'Tabloid' },
-]
-
-const VIBE_OPTIONS: { value: RelationshipVibe; label: string }[] = [
-  { value: 'friend', label: 'Friend' },
-  { value: 'romantic', label: 'Romantic partner' },
-  { value: 'rival', label: 'Rival' },
-  { value: 'mentor', label: 'Mentor' },
-  { value: 'teammate_bond', label: 'Teammate' },
-  { value: 'fan', label: 'Fan' },
-  { value: 'frenemy', label: 'Frenemy' },
-]
+import { isNPC, type AIProviderConfig, type Avatar as AvatarType } from '../../types'
 
 interface SettingsProps {
   onBack: () => void
@@ -58,9 +36,20 @@ export function Settings({ onBack }: SettingsProps) {
   const [personName, setPersonName] = useState('')
   const [personUsername, setPersonUsername] = useState('')
   const [personBio, setPersonBio] = useState('')
-  const [personPersona, setPersonPersona] = useState<Persona>('loyal_fan')
-  const [personVibe, setPersonVibe] = useState<RelationshipVibe>('friend')
+  const [personFollowers, setPersonFollowers] = useState('')
+  const [personAvatar, setPersonAvatar] = useState<AvatarType | undefined>(undefined)
   const [personMessage, setPersonMessage] = useState<string | null>(null)
+  const personAvatarInputRef = useRef<HTMLInputElement>(null)
+
+  const handlePersonAvatarFile = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file)
+      setPersonAvatar({ kind: 'webp', value: dataUrl })
+    } catch {
+      setPersonMessage("Couldn't use that picture — try a different one.")
+    }
+  }
 
   const handleAddPerson = () => {
     if (!personName.trim()) {
@@ -71,14 +60,15 @@ export function Settings({ onBack }: SettingsProps) {
       displayName: personName.trim(),
       username: personUsername.trim() || personName.trim().toLowerCase().replace(/\s+/g, ''),
       bio: personBio.trim(),
-      persona: personPersona,
-      vibe: personVibe,
+      followers: Number(personFollowers.replace(/[^0-9]/g, '')) || undefined,
+      avatar: personAvatar,
     })
     setPersonName('')
     setPersonUsername('')
     setPersonBio('')
-    setPersonPersona('loyal_fan')
-    setPersonVibe('friend')
+    setPersonFollowers('')
+    setPersonAvatar(undefined)
+    if (personAvatarInputRef.current) personAvatarInputRef.current.value = ''
     setPersonMessage(`Added ${personName.trim()} to your network.`)
   }
 
@@ -384,11 +374,49 @@ export function Settings({ onBack }: SettingsProps) {
       <section className="mt-6">
         <h2 className="text-sm font-semibold text-neutral-500">People</h2>
         <p className="mt-2 text-sm text-neutral-500">
-          Add a person to your network — a partner, a rival, a friend — and they'll show up in your feed,
-          comment, DM, and be available for Activities. Only people you add here can be removed.
+          Add a person to your network — a partner, a rival, a tabloid account, anyone — and they'll show up in
+          your feed, comment, DM, and be available for Activities. What they post and how they relate to you is
+          inferred from their name and bio (e.g. a bio like "tabloid celeb news" posts gossip). Only people you
+          add here can be removed.
         </p>
 
         <div className="mt-3 grid gap-3 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => personAvatarInputRef.current?.click()}
+              aria-label="Add a picture"
+              className="shrink-0 cursor-pointer rounded-full"
+            >
+              {personAvatar ? (
+                <Avatar avatar={personAvatar} seed="new-person" size={48} />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-neutral-300 text-xs text-neutral-500 dark:border-neutral-700">
+                  Photo
+                </div>
+              )}
+            </button>
+            <input
+              ref={personAvatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handlePersonAvatarFile(e.target.files?.[0])}
+            />
+            {personAvatar && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPersonAvatar(undefined)
+                  if (personAvatarInputRef.current) personAvatarInputRef.current.value = ''
+                }}
+                className="cursor-pointer text-xs font-medium text-neutral-500 underline underline-offset-2"
+              >
+                Remove picture
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-neutral-600 dark:text-neutral-400">Name</span>
@@ -400,7 +428,7 @@ export function Settings({ onBack }: SettingsProps) {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-neutral-600 dark:text-neutral-400">Username</span>
+              <span className="font-medium text-neutral-600 dark:text-neutral-400">Handle</span>
               <input
                 value={personUsername}
                 onChange={(e) => setPersonUsername(e.target.value)}
@@ -415,41 +443,21 @@ export function Settings({ onBack }: SettingsProps) {
             <input
               value={personBio}
               onChange={(e) => setPersonBio(e.target.value)}
-              placeholder="Who are they?"
+              placeholder="Who are they? e.g. Tabloid celeb news"
               className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-neutral-600 dark:text-neutral-400">Public role</span>
-              <select
-                value={personPersona}
-                onChange={(e) => setPersonPersona(e.target.value as Persona)}
-                className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
-              >
-                {PERSONA_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-neutral-600 dark:text-neutral-400">Relationship</span>
-              <select
-                value={personVibe}
-                onChange={(e) => setPersonVibe(e.target.value as RelationshipVibe)}
-                className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
-              >
-                {VIBE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium text-neutral-600 dark:text-neutral-400">Followers</span>
+            <input
+              inputMode="numeric"
+              value={personFollowers}
+              onChange={(e) => setPersonFollowers(e.target.value)}
+              placeholder="optional, e.g. 30000000"
+              className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
+            />
+          </label>
 
           <button
             onClick={handleAddPerson}

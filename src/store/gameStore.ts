@@ -3,11 +3,11 @@ import type {
   Activity,
   ActivityMessage,
   ActivityLogEntry,
+  Avatar,
   DMMessage,
   DMThread,
   Effect,
   NPC,
-  Persona,
   PlayerState,
   Post,
   Profile,
@@ -21,11 +21,13 @@ import type {
 import {
   createSeededWorld,
   defaultSettings,
+  defaultVibeForPersona,
   defaultWorldSettings,
   initialsFor,
   PLAYER_ID,
   type OnboardingInput,
 } from '../content/seed'
+import { inferPersonaFromBio } from '../engine/personaInference'
 import { CAREER_PACKS } from '../content/careers'
 import { isNPC } from '../types'
 import { makeId } from '../engine/id'
@@ -184,8 +186,8 @@ export interface AddCustomPersonInput {
   displayName: string
   username: string
   bio: string
-  persona: Persona
-  vibe: RelationshipVibe
+  followers?: number
+  avatar?: Avatar
 }
 
 export interface CreateActivityInput {
@@ -693,21 +695,28 @@ export const useGameStore = create<GameState>((set, get) => {
       frenemy: -10,
     }
 
+    // No "public role"/"relationship" pickers — a custom person only gives a
+    // name, handle, bio, followers and an optional picture. Which content
+    // pool they post/react from, and their default relationship vibe, are
+    // inferred from that text (see personaInference.ts).
+    const persona = inferPersonaFromBio(input.displayName, input.bio)
+    const vibe = defaultVibeForPersona(persona)
+
     const npc: NPC = {
       id,
       username: input.username.replace(/^@/, '').trim() || id,
       displayName: input.displayName.trim() || 'New Person',
       bio: input.bio.trim(),
-      avatar: { kind: 'initials', value: initialsFor(input.displayName || 'NP') },
+      avatar: input.avatar ?? { kind: 'initials', value: initialsFor(input.displayName || 'NP') },
       verified: false,
-      followers: randomInt(rng, 500, 50_000),
+      followers: input.followers && input.followers > 0 ? Math.round(input.followers) : randomInt(rng, 500, 50_000),
       following: randomInt(rng, 50, 500),
       joinedAt: now,
       isPlayer: false,
-      persona: input.persona,
+      persona,
       personality: [],
-      relationship: startingRelationshipByVibe[input.vibe],
-      vibe: input.vibe,
+      relationship: startingRelationshipByVibe[vibe],
+      vibe,
       mood: 0,
       postingStyle: { emoji: 0.4, caps: 0.1, hashtags: 0.1 },
       recentLineIds: [],
@@ -723,7 +732,7 @@ export const useGameStore = create<GameState>((set, get) => {
       // Give them one live story right away, in the same voice/content pool
       // as the rest of the roster — reuses seedPostPool, no new content needed.
       const pack = CAREER_PACKS[state.player.career]
-      const lines = pack.seedPostPool[input.persona]
+      const lines = pack.seedPostPool[persona]
       let posts = state.posts
       let postOrder = state.postOrder
       if (lines && lines.length > 0) {

@@ -10,6 +10,20 @@ interface AvatarProps {
 }
 
 function AvatarImpl({ avatar, seed, size = 44, ring = false }: AvatarProps) {
+  if (avatar.kind !== 'initials') {
+    return (
+      <img
+        src={avatar.value}
+        alt=""
+        className={`shrink-0 rounded-full object-cover select-none ${
+          ring ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-fuchsia-500' : ''
+        }`}
+        style={{ width: size, height: size }}
+        aria-hidden
+      />
+    )
+  }
+
   const { h1, h2, h3, angle } = paletteFor(seed)
   const style = {
     width: size,
@@ -26,7 +40,7 @@ function AvatarImpl({ avatar, seed, size = 44, ring = false }: AvatarProps) {
       style={style}
       aria-hidden
     >
-      {avatar.kind === 'initials' ? avatar.value : null}
+      {avatar.value}
     </div>
   )
 }
