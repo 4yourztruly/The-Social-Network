@@ -14,6 +14,14 @@ html,
 body,
 #root {
   height: 100%;
+  /* The app is a fixed-height shell (App.tsx's 100dvh root) with its own
+     internal `overflow-y-auto` panes doing all the real scrolling (Feed,
+     Profile, DMThread, ...). Without this, html/body's own box can still
+     grow taller than the viewport (e.g. a focused input nudging layout, or
+     100% vs 100dvh rounding) and become scrollable themselves — which reads
+     as the *entire app*, bottom nav included, scrolling/dragging around
+     instead of just the one pane that's supposed to move. */
+  overflow: hidden;
 }
 
 html {
@@ -26,10 +34,6 @@ html {
 body {
   margin: 0;
   background-color: var(--color-white);
-  /* All real scrolling happens inside individual `overflow-y-auto` panes
-     (see e.g. Feed, Profile, DMThread). Without this, the outer page can
-     also rubber-band/pull-to-refresh on mobile, which reads as the whole
-     app "scrolling weird" on top of whatever pane is actually scrolling. */
   overscroll-behavior: none;
 }
 

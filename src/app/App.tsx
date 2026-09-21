@@ -121,11 +121,14 @@ export default function App() {
   }
 
   return (
-    <div className="relative mx-auto flex w-full max-w-xl md:max-w-4xl" style={{ height: '100dvh' }}>
+    <div
+      className="relative mx-auto flex w-full max-w-xl overflow-hidden md:max-w-4xl"
+      style={{ height: '100dvh' }}
+    >
       <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
       <div
-        className="relative flex h-full min-w-0 flex-1 flex-col bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
+        className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         {postOutcome && (
