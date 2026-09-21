@@ -3,17 +3,13 @@ interface CenteredBarProps {
   className?: string
 }
 
-// The whole filled segment is one solid color determined by how far right
-// of center the value sits — barely positive reads as yellow, strongly
-// positive reads as green, with a smooth interpolation between (not a
-// gradient smeared across the fill's own width, which read as "yellow at
-// the base, green at the tip" regardless of the actual value). Negative
-// values are always solid red.
+// The whole filled segment is one flat color by simple threshold — not a
+// gradient, not an interpolation: negative is red, anything from just
+// above 0 up to 25 is yellow, above 25 is green.
 function colorForValue(clamped: number): string {
-  if (clamped <= 0) return 'var(--color-rose-500)'
-  const t = Math.min(1, clamped / 100)
-  const hue = 45 + t * (155 - 45) // 45deg ~ amber/yellow, 155deg ~ emerald
-  return `hsl(${hue}deg 75% 45%)`
+  if (clamped < 0) return 'var(--color-rose-500)'
+  if (clamped > 25) return 'var(--color-emerald-500)'
+  return 'var(--color-amber-500)'
 }
 
 // A center-anchored gauge, matching the reference's stat/relationship

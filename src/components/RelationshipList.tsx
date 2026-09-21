@@ -11,8 +11,9 @@ interface RelationshipListProps {
 }
 
 // Every person the player follows, as a relationship card: avatar, name,
-// a 0-100% bar, and a caption naming the most recent thing that moved it —
-// shown on the player's own profile, under the Humor/Aura stats.
+// a -100..100% center-anchored bar, and a caption naming the most recent
+// thing that moved it — shown on the player's own profile, under the
+// Humor/Aura stats.
 export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
   const profiles = useGameStore((s) => s.profiles)
 
@@ -33,7 +34,6 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
       <div className="mt-2 flex flex-col gap-2">
         {npcs.map((npc) => {
           const clamped = Math.max(-100, Math.min(100, npc.relationship))
-          const pct = Math.round(((clamped + 100) / 200) * 100)
           const change = npc.lastRelationshipChange
 
           return (
@@ -53,7 +53,7 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
 
               <div className="mt-2 flex items-center gap-2">
                 <CenteredBar value={clamped} className="flex-1" />
-                <span className="shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">{pct}%</span>
+                <span className="shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">{clamped}%</span>
               </div>
 
               {change && (

@@ -208,10 +208,10 @@ function StatBar({ emoji, label, value, change }: StatBarProps) {
               }`}
             >
               {change.delta > 0 ? '+' : ''}
-              {change.delta}%
+              {change.delta * 2}%
             </span>
           )}
-          <span className="font-semibold">{pct}%</span>
+          <span className="font-semibold">{centered}%</span>
         </span>
       </div>
       <CenteredBar value={centered} className="mt-1.5" />
