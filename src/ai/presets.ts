@@ -24,11 +24,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     defaultModel: 'openai/gpt-oss-20b',
     notes: 'Create a free key at console.groq.com. No billing details needed for the free tier.',
     defaultRpmBudget: 20,
-    // Bumped from 300: the social-circle comment feature can use up to ~9
-    // calls per post (circle comments + cross-replies), so a lower cap
-    // would run out after only a handful of posts. Still under 5% of
-    // Groq's real free-tier daily limit (14,400/day).
-    defaultRpdBudget: 700,
+    // Every comment on every post is now AI-eligible (not just the social
+    // circle), so a single popular post can use 15-25+ calls on its own.
+    // Still well under Groq's real free-tier daily limit (14,400/day).
+    defaultRpdBudget: 3000,
   },
   {
     id: 'openrouter',

@@ -259,9 +259,9 @@ export function Settings({ onBack }: SettingsProps) {
           </span>
         </div>
         <p className="mt-2 text-sm text-neutral-500">
-          Bring your own free API key and NPCs will reply to your DMs with real AI, in character — and one
-          commenter per post can bring up your recent activity, like gossip. Without a key, DMs and comments
-          still work using built-in personality-flavored templates.
+          Bring your own free API key and NPCs will reply to your DMs with real AI, in character — and every
+          comment on your posts reacts to what you actually said, sometimes bringing up recent gossip too.
+          Without a key, DMs and comments still work using built-in personality-flavored templates.
         </p>
 
         <div className="mt-3 flex items-center gap-2">

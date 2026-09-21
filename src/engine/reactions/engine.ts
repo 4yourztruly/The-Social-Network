@@ -19,12 +19,12 @@ export interface CommentPayload {
   text: string
   tags: string[]
   // Marks this comment as one the AI path may replace with a live-generated
-  // line — see src/ai/commentService.ts. Only ever set for the player's
-  // social circle (see runSocialCircleEngine below), never for the broad
-  // crowd runReactionEngine produces, so AI volume stays proportional to
-  // who the player actually follows. The deterministic `text` above is
-  // always computed regardless, as the fallback when AI is off,
-  // unconfigured, over budget, or fails.
+  // line grounded in the post's actual text (and, sometimes, recent gossip)
+  // — see src/ai/commentService.ts. Every comment gets this now (both the
+  // broad crowd below and the social circle further down), so replies
+  // actually react to what was posted instead of reading as generic canned
+  // lines. The deterministic `text` above is always computed regardless, as
+  // the fallback when AI is off, unconfigured, over budget, or fails.
   aiEligible?: boolean
   // If set, once this comment lands, schedule exactly one AI-eligible
   // reply to it from this other social-circle NPC — one level deep only,
@@ -96,7 +96,7 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
       id: makeId('sched'),
       dueAt,
       kind: 'comment',
-      payload: { parentPostId: postId, npcId: npc.id, text, tags: event.tags },
+      payload: { parentPostId: postId, npcId: npc.id, text, tags: event.tags, aiEligible: true },
     })
   }
 
