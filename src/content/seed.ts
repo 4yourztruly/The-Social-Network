@@ -38,14 +38,7 @@ export function createPlayerState(pack: CareerPack, input: OnboardingInput): Pla
     club: input.org, // exactly what the player said — may be '', never invented
     position: input.role, // exactly what the player said — may be '', never invented
     ratings: { ...pack.defaultRatings },
-    fame: 55,
-    morale: 60,
-    form: 60,
     traits: [],
-    hype: 50,
-    charisma: 55,
-    reputation: 60,
-    controversy: 5,
     humor: 50,
     aura: 50,
     xp: 0,

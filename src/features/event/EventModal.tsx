@@ -9,10 +9,6 @@ interface EventModalProps {
 }
 
 const STAT_LABELS: Record<string, string> = {
-  hype: 'Hype',
-  charisma: 'Charisma',
-  reputation: 'Reputation',
-  controversy: 'Controversy',
   humor: 'Humor',
   aura: 'Aura',
 }
@@ -137,9 +133,7 @@ export function EventModal({ onOpenProfile }: EventModalProps) {
               )}
               {encounter.resolution.statDeltas.map((d, i) => {
                 const label = d.type === 'stat' ? (STAT_LABELS[d.target ?? ''] ?? d.target) : d.type
-                // Controversy is the one stat where going up reads as bad,
-                // not good — invert the color for it specifically.
-                const isGood = d.target === 'controversy' ? d.delta < 0 : d.delta > 0
+                const isGood = d.delta > 0
                 return (
                   <span
                     key={i}

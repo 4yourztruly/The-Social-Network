@@ -8,12 +8,6 @@ function labelFor(effect: Effect): string {
   switch (effect.type) {
     case 'followers':
       return 'Followers'
-    case 'fame':
-      return 'Fame'
-    case 'morale':
-      return 'Morale'
-    case 'form':
-      return 'Form'
     case 'stat':
       return effect.target ? effect.target[0].toUpperCase() + effect.target.slice(1) : 'Stat'
     default:
@@ -54,8 +48,7 @@ export function OutcomeBanner({ outcome, onDismiss }: OutcomeBannerProps) {
       {visibleDeltas.length > 0 && (
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
           {visibleDeltas.map((effect, i) => {
-            // Controversy is the one stat where going up reads as bad.
-            const isGood = effect.target === 'controversy' ? effect.delta < 0 : effect.delta >= 0
+            const isGood = effect.delta >= 0
             return (
               <span key={i} className={isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                 {formatDelta(effect)} {labelFor(effect)}

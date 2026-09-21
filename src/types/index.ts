@@ -105,22 +105,15 @@ export interface PlayerState {
   club: string // the player's org — a club, label, or team depending on career
   position: string // the player's role within that org
   ratings: Record<string, number> // career-specific stat keys, e.g. finishing/passing or vocals/stage_presence
-  fame: number
-  morale: number
-  form: number
   traits: string[] // 'selfish','team_player','controversial'
   // Social stats — see PROJECT_SPEC.md section 17.5 "Outcome banner + stat deltas"
-  hype: number
-  charisma: number
-  reputation: number
-  controversy: number // 0..100 meter; past a threshold triggers a cancel/scandal arc
   humor: number // gained from posts that land as funny
   aura: number // gained from posts that land as confident/iconic
   xp: number
 }
 
 export interface Effect {
-  type: 'mood' | 'fame' | 'relationship' | 'followers' | 'morale' | 'form' | 'stat'
+  type: 'mood' | 'relationship' | 'followers' | 'stat'
   target?: string // npc id for relationship/mood, stat name for stat
   delta: number
 }

@@ -93,14 +93,7 @@ const playerStateSchema = z.object({
   club: z.string(),
   position: z.string(),
   ratings: z.record(z.string(), z.number()),
-  fame: z.number(),
-  morale: z.number(),
-  form: z.number(),
   traits: z.array(z.string()),
-  hype: z.number(),
-  charisma: z.number(),
-  reputation: z.number(),
-  controversy: z.number(),
   humor: z.number(),
   aura: z.number(),
   xp: z.number(),
@@ -120,7 +113,7 @@ const settingsSchema = z.object({
 })
 
 const effectSchema = z.object({
-  type: z.enum(['mood', 'fame', 'relationship', 'followers', 'morale', 'form', 'stat']),
+  type: z.enum(['mood', 'relationship', 'followers', 'stat']),
   target: z.string().optional(),
   delta: z.number(),
 })

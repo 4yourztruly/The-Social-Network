@@ -57,7 +57,7 @@ export interface ReactionEngineArgs {
   orgName: string
   playerDisplayName: string
   playerFollowers: number
-  playerFame: number
+  playerSocialScore: number // (humor + aura) / 2 — see formulas.estimateEngagement
   rng: RNG
   now: number
 }
@@ -69,14 +69,24 @@ function relationshipWeight(npc: NPC): number {
 }
 
 export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
-  const { event, postId, npcs, reactionPool, orgName, playerDisplayName, playerFollowers, playerFame, rng, now } =
-    args
+  const {
+    event,
+    postId,
+    npcs,
+    reactionPool,
+    orgName,
+    playerDisplayName,
+    playerFollowers,
+    playerSocialScore,
+    rng,
+    now,
+  } = args
 
   const eligiblePersonas = new Set(eligiblePersonasForTags(event.tags))
   const candidates = npcs.filter((n) => eligiblePersonas.has(n.persona))
   const pool = candidates.length > 0 ? candidates : npcs
 
-  const commentCount = pool.length > 0 ? commentCountForPost(rng, playerFame) : 0
+  const commentCount = pool.length > 0 ? commentCountForPost(rng, playerSocialScore) : 0
 
   const scheduledItems: ScheduledCommentItem[] = []
   const npcLineUpdates: Record<string, string[]> = {}
@@ -102,10 +112,15 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
 
   scheduledItems.sort((a, b) => a.dueAt - b.dueAt)
 
-  const engagement = estimateEngagement(rng, playerFollowers, playerFame, event.tags)
-  const followerDelta = followerDeltaFromEngagement(engagement)
+  const engagement = estimateEngagement(rng, playerFollowers, playerSocialScore, event.tags)
+  const engagementFollowerDelta = followerDeltaFromEngagement(engagement)
+  const tagEffects = statDeltasForTags(rng, event.tags)
+  const tagFollowerDelta = tagEffects
+    .filter((e) => e.type === 'followers')
+    .reduce((sum, e) => sum + e.delta, 0)
+  const followerDelta = engagementFollowerDelta + tagFollowerDelta
   const statDeltas: Effect[] = [
-    ...statDeltasForTags(rng, event.tags),
+    ...tagEffects.filter((e) => e.type !== 'followers'),
     { type: 'followers', delta: followerDelta },
   ]
 

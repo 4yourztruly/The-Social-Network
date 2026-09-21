@@ -17,7 +17,7 @@ interface ProfileProps {
   onOpenSettings?: () => void
 }
 
-type Tab = 'posts' | 'replies' | 'stories'
+type Tab = 'overview' | 'posts' | 'replies'
 
 // Rating keys are career-specific snake_case (finishing, vocals, arm_strength,
 // ...) — prettify generically instead of hard-coding one career's labels.
@@ -35,10 +35,15 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
   const postOrder = useGameStore((s) => s.postOrder)
   const followNpc = useGameStore((s) => s.followNpc)
   const unfollowNpc = useGameStore((s) => s.unfollowNpc)
-  const [tab, setTab] = useState<Tab>('posts')
+  const [tab, setTab] = useState<Tab>('overview')
 
-  const authoredPostIds = useMemo(
-    () => postOrder.filter((id) => posts[id]?.authorId === profileId && posts[id]?.kind === 'post'),
+  // Posts tab covers both feed posts and stories — a full record of
+  // everything this profile has put out, regardless of story expiry.
+  const authoredPostAndStoryIds = useMemo(
+    () =>
+      postOrder.filter(
+        (id) => posts[id]?.authorId === profileId && (posts[id]?.kind === 'post' || posts[id]?.kind === 'story'),
+      ),
     [postOrder, posts, profileId],
   )
 
@@ -61,7 +66,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         )}
         <div className="flex-1">
           <p className="text-[15px] font-semibold leading-tight">{profile.displayName}</p>
-          <p className="text-xs text-neutral-500">{authoredPostIds.length} posts</p>
+          <p className="text-xs text-neutral-500">{authoredPostAndStoryIds.length} posts</p>
         </div>
         {profile.isPlayer && onOpenSettings && (
           <button
@@ -123,40 +128,10 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
             <span className="text-neutral-500">Followers</span>
           </span>
         </div>
-
-        {npc && <RelationshipMeter relationship={npc.relationship} vibe={npc.vibe} />}
-
-        {profile.isPlayer && (
-          <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-neutral-200 p-3 text-center text-sm dark:border-neutral-800">
-            <Stat label="Fame" value={player.fame} />
-            <Stat label="Morale" value={player.morale} />
-            <Stat label="Form" value={player.form} />
-            <Stat label="Hype" value={player.hype} />
-            <Stat label="Charisma" value={player.charisma} />
-            <Stat label="Reputation" value={player.reputation} />
-            <Stat label="Humor" value={player.humor} />
-            <Stat label="Aura" value={player.aura} />
-          </div>
-        )}
-
-        {profile.isPlayer && <ControversyMeter value={player.controversy} />}
-
-        {profile.isPlayer && <RelationshipList onOpenProfile={onOpenProfile} />}
-
-        {profile.isPlayer && (
-          <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
-            {Object.entries(player.ratings).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between">
-                <span className="text-neutral-500">{prettifyStatKey(key)}</span>
-                <span className="font-semibold">{value}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="mt-4 flex border-b border-neutral-200 text-sm font-medium dark:border-neutral-800">
-        {(['posts', 'replies', 'stories'] as Tab[]).map((t) => (
+        {(['overview', 'posts', 'replies'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -166,14 +141,44 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
                 : 'text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900'
             }`}
           >
-            {t === 'stories' ? 'Stories highlights' : t}
+            {t}
           </button>
         ))}
       </div>
 
+      {tab === 'overview' && (
+        <div className="px-4 py-4">
+          {npc && <RelationshipMeter relationship={npc.relationship} vibe={npc.vibe} />}
+
+          {profile.isPlayer && (
+            <>
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-neutral-200 p-3 text-center text-sm dark:border-neutral-800">
+                <Stat label="Humor" value={player.humor} />
+                <Stat label="Aura" value={player.aura} />
+              </div>
+
+              {Object.keys(player.ratings).length > 0 && (
+                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  {Object.entries(player.ratings).map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-neutral-500">{prettifyStatKey(key)}</span>
+                      <span className="font-semibold">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4">
+                <RelationshipList onOpenProfile={onOpenProfile} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {tab === 'posts' &&
-        (authoredPostIds.length > 0 ? (
-          authoredPostIds.map((id) => (
+        (authoredPostAndStoryIds.length > 0 ? (
+          authoredPostAndStoryIds.map((id) => (
             <PostCard key={id} postId={id} onOpenProfile={onOpenProfile} onOpenThread={onOpenThread} />
           ))
         ) : (
@@ -192,7 +197,6 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         ) : (
           <p className="p-8 text-center text-sm text-neutral-500">No replies yet.</p>
         ))}
-      {tab === 'stories' && <p className="p-8 text-center text-sm text-neutral-500">No story highlights yet.</p>}
     </div>
   )
 }
@@ -202,22 +206,6 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div>
       <p className="text-lg font-bold">{value}</p>
       <p className="text-xs text-neutral-500">{label}</p>
-    </div>
-  )
-}
-
-function ControversyMeter({ value }: { value: number }) {
-  const clamped = Math.max(0, Math.min(100, value))
-  const color = clamped >= 70 ? 'bg-rose-500' : clamped >= 40 ? 'bg-amber-500' : 'bg-emerald-500'
-  return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between text-xs text-neutral-500">
-        <span>Controversy</span>
-        <span>{clamped}/100</span>
-      </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
-        <div className={`h-full ${color} transition-[width]`} style={{ width: `${clamped}%` }} />
-      </div>
     </div>
   )
 }

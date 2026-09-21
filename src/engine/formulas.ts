@@ -18,6 +18,8 @@ const TAG_ENGAGEMENT_MULTIPLIER: Record<string, number> = {
   rivalry: 1.3,
   controversial: 1.7,
   party: 1.3,
+  funny: 1.3,
+  aura_moment: 1.3,
 }
 
 export interface Engagement {
@@ -25,13 +27,16 @@ export interface Engagement {
   reposts: number
 }
 
+// `socialScore` is the player's current (humor + aura) / 2 — the closer a
+// player is to being funny/iconic, the more a post naturally lands with
+// their existing audience.
 export function estimateEngagement(
   rng: RNG,
   followers: number,
-  fame: number,
+  socialScore: number,
   tags: readonly string[],
 ): Engagement {
-  const engagementRate = 0.004 + (fame / 100) * 0.01
+  const engagementRate = 0.004 + (socialScore / 100) * 0.01
   const tagMultiplier = tags.reduce(
     (max, tag) => Math.max(max, TAG_ENGAGEMENT_MULTIPLIER[tag] ?? 1),
     1,
@@ -49,68 +54,56 @@ export function followerDeltaFromEngagement(engagement: Engagement): number {
 
 // How many NPC comments a post's reaction should schedule. Spec section 4.4:
 // "schedules 5-15 comments ... with staggered timestamps".
-export function commentCountForPost(rng: RNG, fame: number): number {
-  const bonus = Math.round((fame / 100) * 4)
+export function commentCountForPost(rng: RNG, socialScore: number): number {
+  const bonus = Math.round((socialScore / 100) * 4)
   return Math.min(15, randomInt(rng, 5, 11) + bonus)
 }
 
 // Stat deltas per canonical tag — summed across whatever tags the keyword
 // tagger actually found in the caption. A plain post with no detected tags
-// still gets a small baseline for the act of posting.
+// still gets a small baseline for the act of posting. Everything here only
+// ever touches humor, aura, and (for the tags that should cost you an
+// audience) followers directly — see PROJECT_SPEC.md section 17.5.
 const BASE_DELTAS_BY_TAG: Record<string, Effect[]> = {
-  big_moment: [
-    { type: 'fame', delta: 2 },
-    { type: 'stat', target: 'hype', delta: 3 },
-    { type: 'morale', delta: 2 },
-  ],
-  huge_moment: [
-    { type: 'fame', delta: 3 },
-    { type: 'stat', target: 'hype', delta: 4 },
-    { type: 'morale', delta: 3 },
-  ],
-  win: [
-    { type: 'fame', delta: 1 },
-    { type: 'morale', delta: 1 },
-  ],
-  loss: [{ type: 'morale', delta: -2 }],
+  big_moment: [{ type: 'stat', target: 'aura', delta: 3 }],
+  huge_moment: [{ type: 'stat', target: 'aura', delta: 5 }],
+  win: [{ type: 'stat', target: 'aura', delta: 2 }],
+  loss: [{ type: 'stat', target: 'aura', delta: -2 }],
   rivalry: [
-    { type: 'stat', target: 'hype', delta: 1 },
-    { type: 'stat', target: 'controversy', delta: 1 },
+    { type: 'stat', target: 'aura', delta: 2 },
+    { type: 'stat', target: 'humor', delta: 1 },
   ],
   controversial: [
-    { type: 'stat', target: 'hype', delta: 4 },
-    { type: 'stat', target: 'reputation', delta: -3 },
-    { type: 'stat', target: 'controversy', delta: 8 },
+    { type: 'stat', target: 'humor', delta: 3 },
+    { type: 'stat', target: 'aura', delta: -3 },
+    { type: 'followers', delta: -2 },
   ],
-  setback: [{ type: 'morale', delta: -2 }],
-  rumor: [{ type: 'stat', target: 'hype', delta: 1 }],
-  deal: [
-    { type: 'fame', delta: 1 },
-    { type: 'stat', target: 'reputation', delta: 1 },
+  setback: [
+    { type: 'stat', target: 'aura', delta: -3 },
+    { type: 'followers', delta: -1 },
   ],
-  criticism: [{ type: 'stat', target: 'reputation', delta: -1 }],
+  rumor: [{ type: 'stat', target: 'humor', delta: 2 }],
+  deal: [{ type: 'stat', target: 'aura', delta: 3 }],
+  criticism: [
+    { type: 'stat', target: 'aura', delta: -2 },
+    { type: 'followers', delta: -1 },
+  ],
   party: [
-    { type: 'stat', target: 'hype', delta: 2 },
-    { type: 'stat', target: 'controversy', delta: 2 },
+    { type: 'stat', target: 'humor', delta: 3 },
+    { type: 'stat', target: 'aura', delta: 1 },
   ],
-  relationship: [
-    { type: 'stat', target: 'hype', delta: 1 },
-    { type: 'stat', target: 'controversy', delta: 1 },
-  ],
-  apology: [
-    { type: 'stat', target: 'reputation', delta: 2 },
-    { type: 'stat', target: 'controversy', delta: -2 },
-  ],
+  relationship: [{ type: 'stat', target: 'aura', delta: 2 }],
+  apology: [{ type: 'stat', target: 'aura', delta: 1 }],
   gratitude: [
-    { type: 'stat', target: 'reputation', delta: 3 },
-    { type: 'morale', delta: 1 },
+    { type: 'stat', target: 'aura', delta: 2 },
+    { type: 'stat', target: 'humor', delta: 1 },
   ],
   // Detected generically (see engine/funMarkers.ts), not career-specific.
   funny: [{ type: 'stat', target: 'humor', delta: 4 }],
   aura_moment: [{ type: 'stat', target: 'aura', delta: 4 }],
 }
 
-const DEFAULT_POST_DELTAS: Effect[] = [{ type: 'morale', delta: 1 }]
+const DEFAULT_POST_DELTAS: Effect[] = [{ type: 'stat', target: 'humor', delta: 1 }]
 
 // Small ±1 noise per delta so identical tags don't feel robotic, still
 // fully deterministic given the same rng sequence.

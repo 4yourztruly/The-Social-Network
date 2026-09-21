@@ -887,7 +887,7 @@ export const useGameStore = create<GameState>((set, get) => {
       orgName: state.player.club || pack.worldName,
       playerDisplayName: playerProfile.displayName,
       playerFollowers: playerProfile.followers,
-      playerFame: state.player.fame,
+      playerSocialScore: (state.player.humor + state.player.aura) / 2,
       rng,
       now,
     })
@@ -1141,6 +1141,16 @@ export const useGameStore = create<GameState>((set, get) => {
     const rng = mulberry32(hashStringToSeed(`${activityId}_end`))
     const statDeltas = statDeltasForTags(rng, activity.tags)
     const nextPlayer = applyPlayerEffects(state.player, statDeltas)
+    const followerDelta = statDeltas
+      .filter((e) => e.type === 'followers')
+      .reduce((sum, e) => sum + e.delta, 0)
+    if (followerDelta !== 0) {
+      const playerProfile = updatedProfiles[PLAYER_ID] as Profile
+      updatedProfiles[PLAYER_ID] = {
+        ...playerProfile,
+        followers: Math.max(0, playerProfile.followers + followerDelta),
+      }
+    }
 
     const names = participants.map((p) => p.displayName).join(' and ')
     const outcomeSummary = names ? `Spent time with ${names}. Things went well.` : 'Activity complete.'

@@ -42,7 +42,7 @@ const baseArgs = {
   orgName: footballerPack.worldName,
   playerDisplayName: 'Alex Rennick',
   playerFollowers: 100_000,
-  playerFame: 60,
+  playerSocialScore: 60,
   now: 1000,
 }
 
@@ -104,7 +104,7 @@ describe('runReactionEngine', () => {
       postId: 'post_1',
       npcs,
       playerFollowers: 500_000,
-      playerFame: 80,
+      playerSocialScore: 80,
       rng: mulberry32(2),
     })
     expect(result.engagement.likes).toBeGreaterThan(0)

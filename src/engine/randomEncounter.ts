@@ -132,8 +132,8 @@ export function tierOutcome(tier: EncounterTier, followers: number): EncounterOu
   if (tier === 'good') {
     return {
       statDeltas: [
-        { type: 'stat', target: 'hype', delta: 3 },
-        { type: 'stat', target: 'reputation', delta: 2 },
+        { type: 'stat', target: 'aura', delta: 4 },
+        { type: 'stat', target: 'humor', delta: 2 },
       ],
       followerDelta: 3 * scale,
       tags: [],
@@ -141,13 +141,10 @@ export function tierOutcome(tier: EncounterTier, followers: number): EncounterOu
   }
   if (tier === 'bad') {
     return {
-      statDeltas: [
-        { type: 'stat', target: 'reputation', delta: -3 },
-        { type: 'stat', target: 'controversy', delta: 5 },
-      ],
+      statDeltas: [{ type: 'stat', target: 'aura', delta: -5 }],
       followerDelta: -2 * scale,
       tags: ['controversial', 'rumor'],
     }
   }
-  return { statDeltas: [{ type: 'morale', delta: 1 }], followerDelta: 0, tags: [] }
+  return { statDeltas: [], followerDelta: 0, tags: [] }
 }

@@ -42,14 +42,14 @@ describe('commentCountForPost', () => {
   it('stays within the 5-15 spec range', () => {
     const rng = mulberry32(7)
     for (let i = 0; i < 100; i++) {
-      const count = commentCountForPost(rng, randomFame(rng))
+      const count = commentCountForPost(rng, randomSocialScore(rng))
       expect(count).toBeGreaterThanOrEqual(5)
       expect(count).toBeLessThanOrEqual(15)
     }
   })
 })
 
-function randomFame(rng: () => number) {
+function randomSocialScore(rng: () => number) {
   return Math.floor(rng() * 100)
 }
 
@@ -60,13 +60,15 @@ describe('statDeltasForTags', () => {
     expect(a).toEqual(b)
   })
 
-  it('controversial posts raise controversy and lower reputation on average', () => {
+  it('controversial posts raise humor and lower aura/followers on average', () => {
     const rng = mulberry32(9)
     const deltas = statDeltasForTags(rng, ['controversial'])
-    const controversy = deltas.find((d) => d.target === 'controversy')
-    const reputation = deltas.find((d) => d.target === 'reputation')
-    expect(controversy?.delta).toBeGreaterThan(0)
-    expect(reputation?.delta).toBeLessThan(0)
+    const humor = deltas.find((d) => d.target === 'humor')
+    const aura = deltas.find((d) => d.target === 'aura')
+    const followers = deltas.find((d) => d.type === 'followers')
+    expect(humor?.delta).toBeGreaterThan(0)
+    expect(aura?.delta).toBeLessThan(0)
+    expect(followers?.delta).toBeLessThan(0)
   })
 
   it('falls back to a small baseline delta when no tags are detected', () => {
