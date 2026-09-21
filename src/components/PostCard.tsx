@@ -56,6 +56,7 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
   // see engine/npcTier.ts. Their name/avatar render as plain text instead
   // of a dead-end button that looks clickable but does nothing.
   const profileViewable = !isNPC(author) || isViewableProfile(author)
+  const isReply = post.kind === 'reply'
 
   return (
     <article
@@ -102,30 +103,53 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
           onOpenProfile={onOpenProfile}
           className="mt-0.5 whitespace-pre-wrap break-words text-[15px] text-neutral-900 dark:text-neutral-100"
         />
-        <div className="mt-2 flex items-center gap-5 text-neutral-500">
-          <button
-            onClick={handleOpenThreadStopped}
-            disabled={!onOpenThread}
-            className="flex cursor-pointer items-center gap-1.5 text-xs hover:text-sky-500"
-          >
-            <ReplyIcon className="h-[18px] w-[18px]" />
-            {post.replies}
-          </button>
-          <span className="flex items-center gap-1.5 text-xs">
-            <RepostIcon className="h-[18px] w-[18px]" />
-            {post.reposts}
-          </span>
-          <button
-            onClick={handleLikeStopped}
-            className={`flex cursor-pointer items-center gap-1.5 text-xs transition-colors ${
-              post.likedByPlayer ? 'text-rose-500' : 'hover:text-rose-500'
-            }`}
-          >
-            <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
-            {post.likes}
-          </button>
-          <StarIcon className="ml-auto h-[18px] w-[18px] shrink-0" />
-        </div>
+        {isReply ? (
+          <div className="mt-2 flex items-center gap-2 text-neutral-500">
+            <button
+              onClick={handleLikeStopped}
+              className={`flex cursor-pointer items-center gap-1.5 text-xs transition-colors ${
+                post.likedByPlayer ? 'text-rose-500' : 'hover:text-rose-500'
+              }`}
+            >
+              <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
+              {post.likes}
+            </button>
+            <span className="text-xs">|</span>
+            <button
+              onClick={handleOpenThreadStopped}
+              disabled={!onOpenThread}
+              className="cursor-pointer text-xs hover:text-sky-500"
+            >
+              Reply
+            </button>
+            <StarIcon className="ml-auto h-[18px] w-[18px] shrink-0" />
+          </div>
+        ) : (
+          <div className="mt-2 flex items-center gap-5 text-neutral-500">
+            <button
+              onClick={handleOpenThreadStopped}
+              disabled={!onOpenThread}
+              className="flex cursor-pointer items-center gap-1.5 text-xs hover:text-sky-500"
+            >
+              <ReplyIcon className="h-[18px] w-[18px]" />
+              {post.replies}
+            </button>
+            <span className="flex items-center gap-1.5 text-xs">
+              <RepostIcon className="h-[18px] w-[18px]" />
+              {post.reposts}
+            </span>
+            <button
+              onClick={handleLikeStopped}
+              className={`flex cursor-pointer items-center gap-1.5 text-xs transition-colors ${
+                post.likedByPlayer ? 'text-rose-500' : 'hover:text-rose-500'
+              }`}
+            >
+              <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
+              {post.likes}
+            </button>
+            <StarIcon className="ml-auto h-[18px] w-[18px] shrink-0" />
+          </div>
+        )}
       </div>
     </article>
   )

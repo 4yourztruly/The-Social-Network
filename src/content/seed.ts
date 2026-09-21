@@ -162,6 +162,27 @@ function seedPosts(
   return posts.sort((a, b) => b.createdAt - a.createdAt)
 }
 
+// A commenter who replies at all only does so 1-3 times per thread — caps
+// how many of a post's `replies` slots any single NPC can fill, so one
+// account doesn't dominate the comment section.
+const MAX_REPLIES_PER_COMMENTER = 3
+
+// A thread has at most a couple of replies that @-mention an earlier
+// commenter instead of reacting to the original post — banter between
+// commenters, not literal understanding of what was said.
+const MAX_MENTION_REPLIES_PER_THREAD = 2
+const MENTION_REPLY_CHANCE = 0.35
+const REPLY_BANTER_LINES = [
+  "@{target} nah I don't see it",
+  '@{target} 😂😂 say it again',
+  '@{target} facts, no notes',
+  "@{target} you're actually right about that",
+  '@{target} not you starting beef 💀',
+  '@{target} lol true though',
+  '@{target} exactly what I was thinking',
+  '@{target} okay but why is this accurate',
+]
+
 // Materializes an actual reply Post for every one of a seed post's `replies`
 // count — without this, that number was purely cosmetic (PostThread looks
 // up replies by parentId, and none ever existed for seeded posts, so
@@ -170,7 +191,13 @@ function seedPosts(
 // live in-game comments, just generated synchronously in a batch. Any NPC
 // tier can reply here (unlike seedPosts/seedStories) — commenting is what
 // commenter-tier NPCs exist to do.
-function seedReplies(pack: CareerPack, rng: RNG, npcs: Record<string, NPC>, topLevelPosts: Post[]): Post[] {
+function seedReplies(
+  pack: CareerPack,
+  rng: RNG,
+  npcs: Record<string, NPC>,
+  topLevelPosts: Post[],
+  orgForFlavor: string,
+): Post[] {
   const now = Date.now()
   const npcList = Object.values(npcs)
   const recentLineIdsByNpc: Record<string, string[]> = {}
@@ -182,19 +209,55 @@ function seedReplies(pack: CareerPack, rng: RNG, npcs: Record<string, NPC>, topL
     const candidates = npcList.filter((n) => n.id !== parent.authorId)
     if (candidates.length === 0) continue
 
+    // Decide who comments before generating any text: draws from the full
+    // candidate pool each slot, but drops anyone who's already hit their
+    // per-thread cap, so a handful of accounts can't eat every slot.
+    const usageCount: Record<string, number> = {}
+    const commenterPlan: NPC[] = []
     for (let i = 0; i < parent.replies; i++) {
-      const commenter = pick(rng, candidates)
-      const linePool = pack.reactionPool[commenter.persona]
-      if (!linePool) continue
-      const recentLineIds = recentLineIdsByNpc[commenter.id] ?? commenter.recentLineIds
-      const selection = selectLine(rng, linePool, [], recentLineIds)
-      recentLineIdsByNpc[commenter.id] = pushRecentLine(recentLineIds, selection.lineId)
-      // Reaction lines are written as "reply to whoever's post this is" —
-      // {player} fills with the post's actual author, not the game's player.
-      const filled = fillTemplate(selection.line, { player: parentAuthor?.displayName ?? '', org: '' })
-      const text = applyPersonalityVoice(filled, commenter, rng)
+      const eligible = candidates.filter((c) => (usageCount[c.id] ?? 0) < MAX_REPLIES_PER_COMMENTER)
+      if (eligible.length === 0) break
+      const commenter = pick(rng, eligible)
+      usageCount[commenter.id] = (usageCount[commenter.id] ?? 0) + 1
+      commenterPlan.push(commenter)
+    }
+
+    const usedLineIdsThisThread: string[] = []
+    const threadReplies: Post[] = []
+    let mentionsLeft = Math.min(MAX_MENTION_REPLIES_PER_THREAD, Math.max(0, commenterPlan.length - 1))
+
+    for (const commenter of commenterPlan) {
+      const priorRecent = recentLineIdsByNpc[commenter.id] ?? commenter.recentLineIds
+      const mentionCandidates = threadReplies.filter((r) => r.authorId !== commenter.id)
+      const mentionTarget =
+        mentionsLeft > 0 && mentionCandidates.length > 0 && rng() < MENTION_REPLY_CHANCE
+          ? pick(rng, mentionCandidates)
+          : undefined
+
+      let text: string
+      if (mentionTarget) {
+        const targetNpc = npcs[mentionTarget.authorId]
+        const line = pick(rng, REPLY_BANTER_LINES)
+        text = applyPersonalityVoice(line.replace('{target}', targetNpc.username), commenter, rng)
+        mentionsLeft -= 1
+      } else {
+        const linePool = pack.reactionPool[commenter.persona]
+        if (!linePool) continue
+        // Merges this NPC's own anti-repetition history with every line
+        // already used elsewhere in this thread, so two different
+        // commenters don't land on the same canned line back to back.
+        const recentLineIds = [...priorRecent, ...usedLineIdsThisThread]
+        const selection = selectLine(rng, linePool, [], recentLineIds)
+        recentLineIdsByNpc[commenter.id] = pushRecentLine(priorRecent, selection.lineId)
+        usedLineIdsThisThread.push(selection.lineId)
+        // Reaction lines are written as "reply to whoever's post this is" —
+        // {player} fills with the post's actual author, not the game's player.
+        const filled = fillTemplate(selection.line, { player: parentAuthor?.displayName ?? '', org: orgForFlavor })
+        text = applyPersonalityVoice(filled, commenter, rng)
+      }
+
       const createdAt = Math.min(now, parent.createdAt + randomInt(rng, 1, 120) * 60 * 1000)
-      replies.push({
+      const reply: Post = {
         id: makeId('post'),
         authorId: commenter.id,
         kind: 'reply',
@@ -206,7 +269,9 @@ function seedReplies(pack: CareerPack, rng: RNG, npcs: Record<string, NPC>, topL
         reposts: 0,
         replies: 0,
         origin: 'template',
-      })
+      }
+      threadReplies.push(reply)
+      replies.push(reply)
     }
   }
   return replies
@@ -277,7 +342,7 @@ export function createSeededWorld(pack: CareerPack, input: OnboardingInput, seed
   const playerProfile = createPlayerProfile(pack, input)
   const posts = seedPosts(pack, rng, npcs, 45, orgForFlavor)
   const stories = seedStories(pack, rng, npcs, 6, orgForFlavor)
-  const replies = seedReplies(pack, rng, npcs, posts)
+  const replies = seedReplies(pack, rng, npcs, posts, orgForFlavor)
 
   const profiles: Record<string, Profile | NPC> = { [playerProfile.id]: playerProfile, ...npcs }
   const postsRecord: Record<string, Post> = {}
