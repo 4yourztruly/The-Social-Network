@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore'
 import { Avatar } from './Avatar'
 import { VerifiedBadge } from './VerifiedBadge'
 import { formatRelativeTime } from '../engine/time'
-import { HeartIcon, ReplyIcon, RepostIcon } from './icons'
+import { HeartIcon, ReplyIcon, RepostIcon, StarIcon } from './icons'
 import { PostText } from './PostText'
 
 interface PostCardProps {
@@ -83,28 +83,31 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
           onOpenProfile={onOpenProfile}
           className="mt-0.5 whitespace-pre-wrap break-words text-[15px] text-neutral-900 dark:text-neutral-100"
         />
-        <div className="mt-2 flex max-w-xs items-center justify-between text-neutral-500">
-          <button
-            onClick={handleOpenThreadStopped}
-            disabled={!onOpenThread}
-            className="flex cursor-pointer items-center gap-1.5 text-xs hover:text-sky-500"
-          >
-            <ReplyIcon className="h-[18px] w-[18px]" />
-            {post.replies}
-          </button>
-          <span className="flex items-center gap-1.5 text-xs">
-            <RepostIcon className="h-[18px] w-[18px]" />
-            {post.reposts}
-          </span>
-          <button
-            onClick={handleLikeStopped}
-            className={`flex cursor-pointer items-center gap-1.5 text-xs transition-colors ${
-              post.likedByPlayer ? 'text-rose-500' : 'hover:text-rose-500'
-            }`}
-          >
-            <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
-            {post.likes}
-          </button>
+        <div className="mt-2 flex items-center text-neutral-500">
+          <div className="flex max-w-[75%] flex-1 items-center justify-between">
+            <button
+              onClick={handleOpenThreadStopped}
+              disabled={!onOpenThread}
+              className="flex cursor-pointer items-center gap-1.5 text-xs hover:text-sky-500"
+            >
+              <ReplyIcon className="h-[18px] w-[18px]" />
+              {post.replies}
+            </button>
+            <span className="flex items-center gap-1.5 text-xs">
+              <RepostIcon className="h-[18px] w-[18px]" />
+              {post.reposts}
+            </span>
+            <button
+              onClick={handleLikeStopped}
+              className={`flex cursor-pointer items-center gap-1.5 text-xs transition-colors ${
+                post.likedByPlayer ? 'text-rose-500' : 'hover:text-rose-500'
+              }`}
+            >
+              <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
+              {post.likes}
+            </button>
+          </div>
+          <StarIcon className="ml-auto h-[18px] w-[18px] shrink-0" />
         </div>
       </div>
     </article>

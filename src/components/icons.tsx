@@ -9,7 +9,7 @@ export function HeartIcon({ className, filled }: IconProps) {
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M12 20.5s-7.5-4.6-10-9.3C.5 7.6 2.3 4 6 4c2 0 3.5 1 6 3.3C14.5 5 16 4 18 4c3.7 0 5.5 3.6 4 7.2-2.5 4.7-10 9.3-10 9.3z"
+        d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"
       />
     </svg>
   )
@@ -18,7 +18,11 @@ export function HeartIcon({ className, filled }: IconProps) {
 export function ReplyIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12c0-4.4 4-8 9-8s9 3.6 9 8-4 8-9 8c-1.3 0-2.6-.2-3.7-.7L4 20l1.2-4.1A7.6 7.6 0 013 12z" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+      />
     </svg>
   )
 }
@@ -26,7 +30,19 @@ export function ReplyIcon({ className }: IconProps) {
 export function RepostIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 4v10a3 3 0 003 3h9M18 20V10a3 3 0 00-3-3H6M3 14l3 3-3 3M21 10l-3-3 3-3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3" />
+    </svg>
+  )
+}
+
+export function StarIcon({ className, filled }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"
+      />
     </svg>
   )
 }
