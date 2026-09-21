@@ -46,7 +46,7 @@ export function CreateActivity({ onBack, onCreated }: CreateActivityProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
         <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
           <ArrowLeftIcon className="h-5 w-5" />
         </button>

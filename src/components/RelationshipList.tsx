@@ -34,12 +34,13 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
           const clamped = Math.max(-100, Math.min(100, npc.relationship))
           const pct = Math.round(((clamped + 100) / 200) * 100)
           const change = npc.lastRelationshipChange
+          const barColor = pct < 20 ? 'bg-amber-500' : pct < 40 ? 'bg-lime-500' : 'bg-emerald-500'
 
           return (
             <button
               key={npc.id}
               onClick={() => onOpenProfile(npc.id)}
-              className="cursor-pointer rounded-2xl border border-neutral-200 p-3 text-left transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900/60"
+              className="cursor-pointer rounded-2xl border border-neutral-200 p-3 text-left transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-800 dark:hover:bg-neutral-700"
             >
               <div className="flex items-center gap-3">
                 <Avatar avatar={npc.avatar} seed={npc.id} size={36} />
@@ -51,8 +52,8 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
               </div>
 
               <div className="mt-2 flex items-center gap-2">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
-                  <div className="h-full bg-emerald-500 transition-[width]" style={{ width: `${pct}%` }} />
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+                  <div className={`h-full ${barColor} transition-[width]`} style={{ width: `${pct}%` }} />
                 </div>
                 <span className="shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">{pct}%</span>
               </div>

@@ -10,7 +10,7 @@ interface BottomNavProps {
 export function BottomNav({ screen, onNavigate }: BottomNavProps) {
   return (
     <nav
-      className="flex shrink-0 border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950"
+      className="flex shrink-0 border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {NAV_ITEMS.map(({ screen: s, label, Icon }) => (

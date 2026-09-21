@@ -49,7 +49,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
         {onBack && (
           <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
             <ArrowLeftIcon className="h-5 w-5" />
@@ -74,7 +74,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
 
       <div className="px-4">
         <div className="-mt-10 flex items-end justify-between">
-          <div className="rounded-full ring-4 ring-white dark:ring-neutral-950">
+          <div className="rounded-full ring-4 ring-white dark:ring-neutral-900">
             <Avatar avatar={profile.avatar} seed={profile.id} size={80} />
           </div>
           {npc && (
@@ -138,7 +138,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
           {profile.isPlayer && (
             <>
               <h2 className="text-sm font-semibold text-neutral-500">Social Media Presence</h2>
-              <div className="mt-2 flex flex-col gap-4 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800">
+              <div className="mt-2 flex flex-col gap-4 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800 dark:bg-neutral-800">
                 <StatBar emoji="😂" label="Humor" value={player.humor} change={player.lastHumorChange} />
                 <StatBar emoji="🌟" label="Aura" value={player.aura} change={player.lastAuraChange} />
               </div>
@@ -209,7 +209,7 @@ function StatBar({ emoji, label, value, change }: StatBarProps) {
           <span className="font-semibold">{pct}%</span>
         </span>
       </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
         <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${pct}%` }} />
       </div>
       {change?.reason && <p className="mt-1.5 truncate text-xs text-neutral-500">{change.reason}</p>}

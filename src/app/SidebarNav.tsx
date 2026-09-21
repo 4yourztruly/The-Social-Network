@@ -10,7 +10,7 @@ interface SidebarNavProps {
 // wide viewport: persistent, hoverable, with a dedicated Post button.
 export function SidebarNav({ screen, onNavigate }: SidebarNavProps) {
   return (
-    <nav className="hidden w-56 shrink-0 flex-col gap-1 border-r border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950 md:flex">
+    <nav className="hidden w-56 shrink-0 flex-col gap-1 border-r border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 md:flex">
       <div className="px-3 py-3 text-lg font-bold">Football Social</div>
       {NAV_ITEMS.filter((item) => item.screen !== 'compose').map(({ screen: s, label, Icon }) => (
         <button

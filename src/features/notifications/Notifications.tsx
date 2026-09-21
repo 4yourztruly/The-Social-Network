@@ -26,7 +26,7 @@ export function Notifications({ onOpenProfile, onOpenThread }: NotificationsProp
 
   return (
     <div className="h-full overflow-y-auto">
-      <h1 className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 px-4 py-3 text-lg font-bold backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
+      <h1 className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 px-4 py-3 text-lg font-bold backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
         Notifications
       </h1>
       {mentionIds.length > 0 ? (

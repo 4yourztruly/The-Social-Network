@@ -46,13 +46,14 @@ body {
 }
 
 .dark body {
-  background-color: var(--color-neutral-950);
+  background-color: var(--color-neutral-900);
 }
 
 /* On desktop the app renders as a centered card (see App.tsx's md:border-x)
    with room on either side — give that margin a faint page background so
    the card reads as a card instead of just floating on identical white. On
-   mobile the card already fills the viewport, so this is never visible. */
+   mobile the card already fills the viewport, so this is never visible.
+   Deliberately darker than the card's own neutral-900 here, for contrast. */
 @media (min-width: 768px) {
   body {
     background-color: var(--color-neutral-100);

@@ -47,7 +47,7 @@ export default function App() {
   if (!onboarded) {
     return (
       <div
-        className="mx-auto flex w-full max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100"
+        className="mx-auto flex w-full max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
         style={{ height: '100dvh' }}
       >
         <Onboarding />
@@ -128,7 +128,7 @@ export default function App() {
       <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
       <div
-        className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
+        className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         {postOutcome && (

@@ -38,7 +38,7 @@ export function DMs({ onOpenThread }: DMsProps) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
         <h1 className="text-lg font-bold">Messages</h1>
         <button
           onClick={() => setShowNewMessage(true)}

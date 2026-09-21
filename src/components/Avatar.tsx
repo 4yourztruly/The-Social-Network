@@ -16,7 +16,7 @@ function AvatarImpl({ avatar, seed, size = 44, ring = false }: AvatarProps) {
         src={avatar.value}
         alt=""
         className={`shrink-0 rounded-full object-cover select-none ${
-          ring ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-blue-500' : ''
+          ring ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 ring-blue-500' : ''
         }`}
         style={{ width: size, height: size }}
         aria-hidden
@@ -35,7 +35,7 @@ function AvatarImpl({ avatar, seed, size = 44, ring = false }: AvatarProps) {
   return (
     <div
       className={`flex shrink-0 items-center justify-center rounded-full font-semibold text-white select-none ${
-        ring ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-blue-500' : ''
+        ring ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 ring-blue-500' : ''
       }`}
       style={style}
       aria-hidden

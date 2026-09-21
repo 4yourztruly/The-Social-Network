@@ -32,7 +32,7 @@ export function Onboarding() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-neutral-950">
+    <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-neutral-900">
       <div className="mx-auto w-full max-w-md flex-1 px-6 py-10">
         <h1 className="text-2xl font-bold">Create your profile</h1>
         <p className="mt-1 text-sm text-neutral-500">

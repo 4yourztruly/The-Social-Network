@@ -16,7 +16,6 @@ interface SettingsProps {
 
 export function Settings({ onBack }: SettingsProps) {
   const settings = useGameStore((s) => s.settings)
-  const setTheme = useGameStore((s) => s.setTheme)
   const setAiEnabled = useGameStore((s) => s.setAiEnabled)
   const setActiveProviderId = useGameStore((s) => s.setActiveProviderId)
   const resetWorld = useGameStore((s) => s.resetWorld)
@@ -205,7 +204,7 @@ export function Settings({ onBack }: SettingsProps) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
         <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
           <ArrowLeftIcon className="h-5 w-5" />
         </button>
@@ -213,25 +212,6 @@ export function Settings({ onBack }: SettingsProps) {
       </div>
 
       <div className="px-4 py-4">
-
-      <section className="mt-6">
-        <h2 className="text-sm font-semibold text-neutral-500">Theme</h2>
-        <div className="mt-2 flex gap-2">
-          {(['system', 'light', 'dark'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTheme(t)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-                settings.theme === t
-                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-                  : 'border border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      </section>
 
       <section className="mt-6">
         <div className="flex items-center justify-between">
