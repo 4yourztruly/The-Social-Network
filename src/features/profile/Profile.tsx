@@ -52,28 +52,20 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
   if (editingProfile) return <EditProfile onBack={() => setEditingProfile(false)} />
 
   const npc = isNPC(profile) ? profile : null
+  // Overview (Humor/Aura/Relationships) only exists for the player's own
+  // profile — an NPC's profile only ever has Posts/Replies. Falls back to
+  // Posts if the tab state still says "overview" from having just left the
+  // player's own profile (no need for an effect just to reset it).
+  const tabs: Tab[] = profile.isPlayer ? ['overview', 'posts', 'replies'] : ['posts', 'replies']
+  const activeTab = tabs.includes(tab) ? tab : 'posts'
 
   return (
     <div className="h-full overflow-y-auto">
-      {!profile.isPlayer && (
-        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
-          {onBack && (
-            <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-              <ArrowLeftIcon className="h-5 w-5" />
-            </button>
-          )}
-          <div className="flex-1">
-            <p className="text-[15px] font-semibold leading-tight">{profile.displayName}</p>
-            <p className="text-xs text-neutral-500">{authoredPostAndStoryIds.length} posts</p>
-          </div>
-        </div>
-      )}
-
       <div
         className="relative z-0 h-24 bg-gradient-to-r from-blue-600/70 to-sky-600/70 bg-cover bg-center"
         style={profile.bannerImage ? { backgroundImage: `url(${profile.bannerImage})` } : undefined}
       >
-        {profile.isPlayer && onBack && (
+        {onBack && (
           <button
             onClick={onBack}
             aria-label="Back"
@@ -159,15 +151,17 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
             </p>
           )}
         </div>
+
+        {npc && <RelationshipMeter relationship={npc.relationship} vibe={npc.vibe} />}
       </div>
 
       <div className="mt-4 flex border-b border-neutral-200 text-sm font-medium dark:border-neutral-800">
-        {(['overview', 'posts', 'replies'] as Tab[]).map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-3 capitalize transition-colors ${
-              tab === t
+              activeTab === t
                 ? 'border-b-2 border-blue-500 text-blue-500 dark:text-blue-400'
                 : 'text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900'
             }`}
@@ -177,27 +171,21 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         ))}
       </div>
 
-      {tab === 'overview' && (
+      {activeTab === 'overview' && profile.isPlayer && (
         <div className="px-4 py-4">
-          {npc && <RelationshipMeter relationship={npc.relationship} vibe={npc.vibe} />}
+          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Social Media Presence</h2>
+          <div className="mt-2 flex flex-col gap-4 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800 dark:bg-neutral-800">
+            <StatBar emoji="😂" label="Humor" value={player.humor} change={player.lastHumorChange} />
+            <StatBar emoji="🌟" label="Aura" value={player.aura} change={player.lastAuraChange} />
+          </div>
 
-          {profile.isPlayer && (
-            <>
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Social Media Presence</h2>
-              <div className="mt-2 flex flex-col gap-4 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800 dark:bg-neutral-800">
-                <StatBar emoji="😂" label="Humor" value={player.humor} change={player.lastHumorChange} />
-                <StatBar emoji="🌟" label="Aura" value={player.aura} change={player.lastAuraChange} />
-              </div>
-
-              <div className="mt-4">
-                <RelationshipList onOpenProfile={onOpenProfile} />
-              </div>
-            </>
-          )}
+          <div className="mt-4">
+            <RelationshipList onOpenProfile={onOpenProfile} />
+          </div>
         </div>
       )}
 
-      {tab === 'posts' &&
+      {activeTab === 'posts' &&
         (authoredPostAndStoryIds.length > 0 ? (
           authoredPostAndStoryIds.map((id) => (
             <PostCard key={id} postId={id} onOpenProfile={onOpenProfile} onOpenThread={onOpenThread} />
@@ -205,7 +193,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         ) : (
           <p className="p-8 text-center text-sm text-neutral-500">No posts yet.</p>
         ))}
-      {tab === 'replies' &&
+      {activeTab === 'replies' &&
         (authoredReplyIds.length > 0 ? (
           authoredReplyIds.map((id) => (
             <PostCard
