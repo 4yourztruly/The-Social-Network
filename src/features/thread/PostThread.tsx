@@ -115,7 +115,11 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
             </>
           )}
 
-          <div className="mt-3 flex items-center gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          <div
+            className={`mt-3 flex items-center gap-2 ${
+              collapsed ? '' : 'border-t border-neutral-200 pt-3 dark:border-neutral-800'
+            }`}
+          >
             <button
               onClick={focusReplyInput}
               className="flex cursor-pointer items-center gap-1.5 rounded-full bg-sky-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-sky-600"
