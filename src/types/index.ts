@@ -28,6 +28,10 @@ export interface Profile {
   following: number
   joinedAt: number
   isPlayer: boolean
+  // Captions the profile page's follower count with what most recently
+  // moved it — same idea as PlayerState.lastHumorChange/NPC's own
+  // lastRelationshipChange, only ever populated for the player's profile.
+  lastFollowerChange?: { delta: number; reason: string; at: number }
 }
 
 export type RelationshipVibe =

@@ -1,8 +1,7 @@
 import { useEffect } from 'react'
 import type { Effect } from '../types'
 import type { PostOutcome } from '../store/gameStore'
-
-const compactFormatter = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
+import { formatCompactNumber } from './formatCompactNumber'
 
 function labelFor(effect: Effect): string {
   switch (effect.type) {
@@ -17,8 +16,8 @@ function labelFor(effect: Effect): string {
 
 function formatDelta(effect: Effect): string {
   const sign = effect.delta >= 0 ? '+' : ''
-  if (effect.type === 'followers' && Math.abs(effect.delta) >= 1000) {
-    return `${sign}${compactFormatter.format(effect.delta)}`
+  if (effect.type === 'followers') {
+    return `${sign}${formatCompactNumber(effect.delta)}`
   }
   return `${sign}${effect.delta}`
 }

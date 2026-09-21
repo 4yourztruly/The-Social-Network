@@ -3,6 +3,7 @@ import { useGameStore } from '../../store/gameStore'
 import { isNPC } from '../../types'
 import { Avatar } from '../../components/Avatar'
 import { CenteredBar } from '../../components/CenteredBar'
+import { formatCompactNumber } from '../../components/formatCompactNumber'
 import { VerifiedBadge } from '../../components/VerifiedBadge'
 import { PostCard } from '../../components/PostCard'
 import { RelationshipMeter } from '../../components/RelationshipMeter'
@@ -111,8 +112,23 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         <p className="mt-2 text-[15px]">{profile.bio}</p>
 
         <div className="mt-3 text-sm">
-          <span className="font-semibold">{profile.followers.toLocaleString()}</span>{' '}
+          <span className="font-semibold">{formatCompactNumber(profile.followers)}</span>{' '}
+          {profile.lastFollowerChange && profile.lastFollowerChange.delta !== 0 && (
+            <span
+              className={`font-semibold ${
+                profile.lastFollowerChange.delta > 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400'
+              }`}
+            >
+              {profile.lastFollowerChange.delta > 0 ? '+' : ''}
+              {formatCompactNumber(profile.lastFollowerChange.delta)}
+            </span>
+          )}{' '}
           <span className="text-neutral-500">Followers</span>
+          {profile.lastFollowerChange?.reason && (
+            <p className="mt-0.5 truncate text-xs text-neutral-500">{profile.lastFollowerChange.reason}</p>
+          )}
         </div>
       </div>
 

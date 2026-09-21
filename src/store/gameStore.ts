@@ -539,6 +539,10 @@ export const useGameStore = create<GameState>((set, get) => {
     const nextPlayerProfile: Profile = {
       ...playerProfile,
       followers: Math.max(0, playerProfile.followers + outcome.followerDelta),
+      lastFollowerChange:
+        outcome.followerDelta !== 0
+          ? { delta: outcome.followerDelta, reason: fallbackText, at: Date.now() }
+          : playerProfile.lastFollowerChange,
     }
 
     set((s) => ({
@@ -925,6 +929,10 @@ export const useGameStore = create<GameState>((set, get) => {
     const nextPlayerProfile: Profile = {
       ...playerProfile,
       followers: playerProfile.followers + result.followerDelta,
+      lastFollowerChange:
+        result.followerDelta !== 0
+          ? { delta: result.followerDelta, reason: postReason, at: now }
+          : playerProfile.lastFollowerChange,
     }
 
     const updatedProfiles: Record<string, Profile | NPC> = {
@@ -1184,6 +1192,7 @@ export const useGameStore = create<GameState>((set, get) => {
       updatedProfiles[PLAYER_ID] = {
         ...playerProfile,
         followers: Math.max(0, playerProfile.followers + followerDelta),
+        lastFollowerChange: { delta: followerDelta, reason: activity.description, at: Date.now() },
       }
     }
 
