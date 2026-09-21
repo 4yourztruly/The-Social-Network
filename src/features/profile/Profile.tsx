@@ -123,7 +123,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
             onClick={() => setTab(t)}
             className={`flex-1 py-3 capitalize transition-colors ${
               tab === t
-                ? 'border-b-2 border-blue-500 text-neutral-900 dark:text-neutral-100'
+                ? 'border-b-2 border-blue-500 text-blue-500 dark:text-blue-400'
                 : 'text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900'
             }`}
           >
