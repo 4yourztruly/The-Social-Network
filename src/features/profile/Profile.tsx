@@ -8,6 +8,7 @@ import { VerifiedBadge } from '../../components/VerifiedBadge'
 import { PostCard } from '../../components/PostCard'
 import { RelationshipMeter } from '../../components/RelationshipMeter'
 import { RelationshipList } from '../../components/RelationshipList'
+import { EditProfile } from './EditProfile'
 import { ArrowLeftIcon, MailIcon, SettingsIcon } from '../../components/icons'
 
 interface ProfileProps {
@@ -29,6 +30,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
   const followNpc = useGameStore((s) => s.followNpc)
   const unfollowNpc = useGameStore((s) => s.unfollowNpc)
   const [tab, setTab] = useState<Tab>('overview')
+  const [editingProfile, setEditingProfile] = useState(false)
 
   // Posts tab covers both feed posts and stories — a full record of
   // everything this profile has put out, regardless of story expiry.
@@ -47,32 +49,49 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
 
   if (!profile) return null
 
+  if (editingProfile) return <EditProfile onBack={() => setEditingProfile(false)} />
+
   const npc = isNPC(profile) ? profile : null
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
-        {onBack && (
-          <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+      {!profile.isPlayer && (
+        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
+          {onBack && (
+            <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+              <ArrowLeftIcon className="h-5 w-5" />
+            </button>
+          )}
+          <div className="flex-1">
+            <p className="text-[15px] font-semibold leading-tight">{profile.displayName}</p>
+            <p className="text-xs text-neutral-500">{authoredPostAndStoryIds.length} posts</p>
+          </div>
+        </div>
+      )}
+
+      <div
+        className="relative h-24 bg-gradient-to-r from-blue-600/70 to-sky-600/70 bg-cover bg-center"
+        style={profile.bannerImage ? { backgroundImage: `url(${profile.bannerImage})` } : undefined}
+      >
+        {profile.isPlayer && onBack && (
+          <button
+            onClick={onBack}
+            aria-label="Back"
+            className="absolute left-3 top-3 cursor-pointer rounded-full bg-black/40 p-2 text-white backdrop-blur hover:bg-black/60"
+          >
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
         )}
-        <div className="flex-1">
-          <p className="text-[15px] font-semibold leading-tight">{profile.displayName}</p>
-          <p className="text-xs text-neutral-500">{authoredPostAndStoryIds.length} posts</p>
-        </div>
         {profile.isPlayer && onOpenSettings && (
           <button
             onClick={onOpenSettings}
             aria-label="Settings"
-            className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="absolute right-3 top-3 cursor-pointer rounded-full bg-black/40 p-2 text-white backdrop-blur hover:bg-black/60"
           >
             <SettingsIcon className="h-5 w-5" />
           </button>
         )}
       </div>
-
-      <div className="h-24 bg-gradient-to-r from-blue-600/70 to-sky-600/70" />
 
       <div className="px-4">
         <div className="-mt-10 flex items-end justify-between">
@@ -102,6 +121,14 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
               </button>
             </div>
           )}
+          {profile.isPlayer && (
+            <button
+              onClick={() => setEditingProfile(true)}
+              className="mb-2 cursor-pointer rounded-full border border-neutral-300 px-4 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-800"
+            >
+              Edit Profile
+            </button>
+          )}
         </div>
 
         <div className="mt-2 flex items-center gap-1">
@@ -112,7 +139,8 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         <p className="mt-2 text-[15px]">{profile.bio}</p>
 
         <div className="mt-3 text-sm">
-          <span className="font-semibold">{formatCompactNumber(profile.followers)}</span>{' '}
+          <span className="font-semibold text-neutral-900 dark:text-white">{formatCompactNumber(profile.followers)}</span>{' '}
+          <span className="text-neutral-500">Followers</span>{' '}
           {profile.lastFollowerChange && profile.lastFollowerChange.delta !== 0 && (
             <span
               className={`font-semibold ${
@@ -124,10 +152,11 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
               {profile.lastFollowerChange.delta > 0 ? '+' : ''}
               {formatCompactNumber(profile.lastFollowerChange.delta)}
             </span>
-          )}{' '}
-          <span className="text-neutral-500">Followers</span>
+          )}
           {profile.lastFollowerChange?.reason && (
-            <p className="mt-0.5 truncate text-xs text-neutral-500">{profile.lastFollowerChange.reason}</p>
+            <p className="mt-0.5 truncate text-xs text-neutral-900 dark:text-white">
+              {profile.lastFollowerChange.reason}
+            </p>
           )}
         </div>
       </div>
@@ -218,11 +247,11 @@ function StatBar({ emoji, label, value, change }: StatBarProps) {
       </span>
       <div className="mt-1.5 flex items-center gap-2">
         <CenteredBar value={centered} className="flex-1" />
-        <span className="shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">{centered}%</span>
+        <span className="shrink-0 text-xs font-semibold text-neutral-900 dark:text-white">{centered}%</span>
       </div>
       {change?.reason && (
         <div className="mt-1 flex items-center gap-2">
-          <p className="min-w-0 flex-1 truncate text-xs text-neutral-500">{change.reason}</p>
+          <p className="min-w-0 flex-1 truncate text-xs text-neutral-900 dark:text-white">{change.reason}</p>
           {change.delta !== 0 && (
             <span
               className={`shrink-0 text-xs font-semibold ${

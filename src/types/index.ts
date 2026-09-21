@@ -32,6 +32,11 @@ export interface Profile {
   // moved it — same idea as PlayerState.lastHumorChange/NPC's own
   // lastRelationshipChange, only ever populated for the player's profile.
   lastFollowerChange?: { delta: number; reason: string; at: number }
+  // Player-editable profile banner (Settings > Edit Profile) — a data URL,
+  // same storage approach as a custom person's uploaded avatar. Only ever
+  // set for the player's own profile; falls back to the gradient banner
+  // when unset.
+  bannerImage?: string
 }
 
 export type RelationshipVibe =

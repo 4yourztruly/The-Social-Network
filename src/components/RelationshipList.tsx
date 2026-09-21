@@ -56,12 +56,12 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
 
               <div className="mt-2 flex items-center gap-2">
                 <CenteredBar value={clamped} className="flex-1" />
-                <span className="shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">{clamped}%</span>
+                <span className="shrink-0 text-xs font-semibold text-neutral-900 dark:text-white">{clamped}%</span>
               </div>
 
               {change && (
                 <div className="mt-1 flex items-center gap-2">
-                  <p className="min-w-0 flex-1 truncate text-xs text-neutral-500">{change.reason}</p>
+                  <p className="min-w-0 flex-1 truncate text-xs text-neutral-900 dark:text-white">{change.reason}</p>
                   {change.delta !== 0 && (
                     <span
                       className={`shrink-0 text-xs font-semibold ${change.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}

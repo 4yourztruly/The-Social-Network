@@ -139,6 +139,7 @@ export interface GameState {
   // world actions
   followNpc: (npcId: string) => void
   unfollowNpc: (npcId: string) => void
+  updatePlayerProfile: (patch: Partial<Pick<Profile, 'displayName' | 'bio' | 'avatar' | 'bannerImage'>>) => void
   muteAccount: (profileId: string) => void
   unmuteAccount: (profileId: string) => void
 
@@ -673,6 +674,14 @@ export const useGameStore = create<GameState>((set, get) => {
           [PLAYER_ID]: { ...player, following: Math.max(0, player.following - 1) },
         },
       }
+    })
+  },
+
+  updatePlayerProfile: (patch) => {
+    set((state) => {
+      const player = state.profiles[PLAYER_ID]
+      if (!player) return state
+      return { profiles: { ...state.profiles, [PLAYER_ID]: { ...player, ...patch } } }
     })
   },
 

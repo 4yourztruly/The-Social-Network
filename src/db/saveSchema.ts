@@ -22,6 +22,7 @@ const profileFields = {
   joinedAt: z.number(),
   isPlayer: z.boolean(),
   lastFollowerChange: z.object({ delta: z.number(), reason: z.string(), at: z.number() }).optional(),
+  bannerImage: z.string().optional(),
 }
 
 // .strict() matters here: z.object() by default *strips* unrecognized keys
