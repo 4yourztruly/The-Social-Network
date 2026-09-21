@@ -2,9 +2,17 @@ import { useMemo, useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import { CAREER_PACKS } from '../../content/careers'
 import { extractOrgFromBio, extractRoleFromBio, inferCareerFromBio } from '../../engine/careerInference'
+import { AIProviderSetup } from '../../components/AIProviderSetup'
+import { loadProviderConfigs } from '../../ai/keyStorage'
+
+type Step = 'ai-choice' | 'ai-setup' | 'profile'
 
 export function Onboarding() {
   const completeOnboarding = useGameStore((s) => s.completeOnboarding)
+  // A returning player who already has a provider configured (from a
+  // previous playthrough) skips straight past this — they've already made
+  // the choice, no need to ask again every time they start a new world.
+  const [step, setStep] = useState<Step>(loadProviderConfigs().length > 0 ? 'profile' : 'ai-choice')
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
@@ -37,6 +45,74 @@ export function Onboarding() {
       // unmounts before the reset would ever be seen.
       setSubmitting(false)
     }
+  }
+
+  if (step === 'ai-choice') {
+    return (
+      <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-neutral-900">
+        <div className="mx-auto w-full max-w-md flex-1 px-6 py-10">
+          <h1 className="text-2xl font-bold">Bring your own AI?</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            With a free AI key connected, the people who follow, comment on, and DM you are generated to fit what
+            you write in your bio — including real public figures where relevant — and every reply reacts to what
+            you actually said. Without one, you still get a full cast of realistic (invented) accounts and
+            personality-flavored template replies.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3">
+            <button
+              onClick={() => setStep('ai-setup')}
+              className="rounded-xl border border-neutral-300 px-4 py-3 text-left text-sm font-semibold hover:border-blue-500 dark:border-neutral-700"
+            >
+              Connect an AI provider
+              <span className="mt-0.5 block text-xs font-normal text-neutral-500">
+                Free key, takes a minute — you can test the connection before continuing.
+              </span>
+            </button>
+            <button
+              onClick={() => setStep('profile')}
+              className="rounded-xl border border-neutral-300 px-4 py-3 text-left text-sm font-semibold hover:border-blue-500 dark:border-neutral-700"
+            >
+              Continue without AI
+              <span className="mt-0.5 block text-xs font-normal text-neutral-500">
+                You can still connect one later from Settings.
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'ai-setup') {
+    return (
+      <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-neutral-900">
+        <div className="mx-auto w-full max-w-md flex-1 px-6 py-10">
+          <button
+            onClick={() => setStep('ai-choice')}
+            className="text-xs font-medium text-neutral-500 underline underline-offset-2"
+          >
+            Back
+          </button>
+          <h1 className="mt-3 text-2xl font-bold">Connect your AI provider</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            Test the connection if you'd like, then continue — this only has to work once for your whole world to
+            be generated around it.
+          </p>
+
+          <div className="mt-6">
+            <AIProviderSetup saveLabel="Save" showRemove={false} />
+          </div>
+
+          <button
+            onClick={() => setStep('profile')}
+            className="mt-4 w-full rounded-full bg-neutral-900 py-2.5 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

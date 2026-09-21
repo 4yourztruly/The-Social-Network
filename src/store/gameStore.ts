@@ -634,12 +634,10 @@ export const useGameStore = create<GameState>((set, get) => {
   completeOnboarding: async (input) => {
     const pack = CAREER_PACKS[input.career]
     // Provider keys persist independently of the per-game `settings` state
-    // (which is about to get reset below anyway) — a returning player who
-    // configured AI in a previous playthrough shouldn't lose it just because
-    // they're starting a new one. A brand-new player has no configured
-    // provider yet at this point (Settings is only reachable after
-    // onboarding), so they always get the curated fallback roster — that's
-    // expected, not a bug.
+    // (which is about to get reset below anyway) — the onboarding "connect
+    // AI" step (Onboarding.tsx) writes here directly via upsertProviderConfig,
+    // and a returning player who configured AI in a previous playthrough
+    // shouldn't lose it just because they're starting a new one.
     const configs = loadProviderConfigs()
     const config = configs[0]
     const aiEligible = !!config && canSpend(config.id, config.rpdBudget)
@@ -664,7 +662,11 @@ export const useGameStore = create<GameState>((set, get) => {
       threads: {},
       aiTyping: [],
       scheduled: [],
-      settings: defaultSettings(),
+      // Carries a configured provider into the new game so AI-powered DMs
+      // and comments keep working after onboarding, not just the roster —
+      // the player just opted into AI, defaultSettings() alone would silently
+      // leave it off.
+      settings: config ? { ...defaultSettings(), aiEnabled: true, activeProviderId: config.id } : defaultSettings(),
       activityLog: [],
       undoStack: [],
       worldSettings: defaultWorldSettings(),

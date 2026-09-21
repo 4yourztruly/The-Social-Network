@@ -4,11 +4,10 @@ import { downloadSaveFile, parseSaveJSON, persistNow } from '../../db/persistenc
 import { ArrowLeftIcon, TrashIcon } from '../../components/icons'
 import { Avatar } from '../../components/Avatar'
 import { fileToAvatarDataUrl } from '../../components/imageUpload'
-import { PROVIDER_PRESETS, presetById, isModelIdAllowed } from '../../ai/presets'
-import { getProviderConfig, upsertProviderConfig, removeProviderConfig } from '../../ai/keyStorage'
+import { AIProviderSetup } from '../../components/AIProviderSetup'
+import { getProviderConfig } from '../../ai/keyStorage'
 import { usageToday } from '../../ai/budget'
-import { createOpenAICompatibleProvider, AIRequestError } from '../../ai/openaiCompatible'
-import { isNPC, type AIProviderConfig, type Avatar as AvatarType } from '../../types'
+import { isNPC, type Avatar as AvatarType } from '../../types'
 
 interface SettingsProps {
   onBack: () => void
@@ -71,103 +70,12 @@ export function Settings({ onBack }: SettingsProps) {
     setPersonMessage(`Added ${personName.trim()} to your network.`)
   }
 
-  const DEFAULT_PRESET_ID = 'groq'
   // Fall back to the default preset id when looking up a saved key: the
   // localStorage key config is written the instant Save is clicked, but
   // settings.activeProviderId only reaches localStorage/IndexedDB via the
   // debounced game-save autosave, so a refresh shortly after saving can see
   // this field still unset even though the actual key is sitting right there.
-  const existingConfig = getProviderConfig(settings.activeProviderId ?? DEFAULT_PRESET_ID)
-  const [presetId, setPresetId] = useState(existingConfig?.id ?? DEFAULT_PRESET_ID)
-  const preset = presetById(presetId) ?? PROVIDER_PRESETS[0]
-  const [baseUrl, setBaseUrl] = useState(existingConfig?.baseUrl ?? preset.baseUrl)
-  const [model, setModel] = useState(existingConfig?.model ?? preset.defaultModel)
-  const [apiKey, setApiKey] = useState(existingConfig?.apiKey ?? '')
-  const [aiMessage, setAiMessage] = useState<string | null>(null)
-  const [testing, setTesting] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(existingConfig ? existingConfig.id !== DEFAULT_PRESET_ID : false)
-
-  const handlePresetChange = (id: string) => {
-    setPresetId(id)
-    const p = presetById(id) ?? PROVIDER_PRESETS[0]
-    const stored = getProviderConfig(id)
-    setBaseUrl(stored?.baseUrl ?? p.baseUrl)
-    setModel(stored?.model ?? p.defaultModel)
-    setApiKey(stored?.apiKey ?? '')
-    setAiMessage(null)
-  }
-
-  const buildConfig = (): AIProviderConfig => ({
-    id: presetId,
-    name: preset.name,
-    baseUrl: baseUrl.trim(),
-    apiKey: apiKey.trim(),
-    model: model.trim(),
-    rpmBudget: preset.defaultRpmBudget,
-    rpdBudget: preset.defaultRpdBudget,
-  })
-
-  const handleSaveProvider = () => {
-    if (!apiKey.trim() && presetId !== 'ollama') {
-      setAiMessage('Enter an API key first.')
-      return
-    }
-    if (!isModelIdAllowed(presetId, model)) {
-      setAiMessage('OpenRouter model ids must end in ":free" — only free models are allowed here.')
-      return
-    }
-    const config = buildConfig()
-    upsertProviderConfig(config)
-    setActiveProviderId(config.id)
-    setAiEnabled(true)
-    setAiMessage('AI provider saved and enabled.')
-  }
-
-  const handleRemoveProvider = () => {
-    removeProviderConfig(presetId)
-    if (settings.activeProviderId === presetId) {
-      setActiveProviderId(undefined)
-      setAiEnabled(false)
-    }
-    setApiKey('')
-    setAiMessage('Provider removed.')
-  }
-
-  const handleTestConnection = async () => {
-    if (!apiKey.trim() && presetId !== 'ollama') {
-      setAiMessage('Enter an API key first.')
-      return
-    }
-    if (!isModelIdAllowed(presetId, model)) {
-      setAiMessage('OpenRouter model ids must end in ":free" — only free models are allowed here.')
-      return
-    }
-    setTesting(true)
-    setAiMessage(null)
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 12_000)
-    try {
-      const provider = createOpenAICompatibleProvider(buildConfig())
-      await provider.complete({
-        system: 'You are a connection test. Reply with the single word OK.',
-        user: 'Say OK.',
-        maxTokens: 300,
-        signal: controller.signal,
-      })
-      setAiMessage('Connection works!')
-    } catch (err) {
-      const reason =
-        err instanceof AIRequestError
-          ? err.message
-          : err instanceof DOMException && err.name === 'AbortError'
-            ? 'Timed out after 12s.'
-            : 'Could not reach the endpoint.'
-      setAiMessage(`Test failed: ${reason}`)
-    } finally {
-      clearTimeout(timeout)
-      setTesting(false)
-    }
-  }
+  const DEFAULT_PRESET_ID = 'groq'
 
   const activeConfig = getProviderConfig(settings.activeProviderId)
   const usedToday = activeConfig ? usageToday(activeConfig.id) : 0
@@ -248,103 +156,21 @@ export function Settings({ onBack }: SettingsProps) {
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-neutral-600 dark:text-neutral-400">
-              Groq API key
-            </span>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-              autoComplete="off"
-              className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 font-mono text-xs dark:border-neutral-700"
-            />
-            <span className="text-xs text-neutral-500">
-              Get a free key at console.groq.com. Stored only on this device, never in your save
-              file.
-            </span>
-          </label>
-
-          <button
-            onClick={() => setShowAdvanced((v) => !v)}
-            className="justify-self-start text-xs font-medium text-neutral-500 underline underline-offset-2"
-          >
-            {showAdvanced ? 'Hide advanced options' : 'Use a different provider'}
-          </button>
-
-          {showAdvanced && (
-            <>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-neutral-600 dark:text-neutral-400">Provider</span>
-                <select
-                  value={presetId}
-                  onChange={(e) => handlePresetChange(e.target.value)}
-                  className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 dark:border-neutral-700"
-                >
-                  {PROVIDER_PRESETS.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-neutral-500">{preset.notes}</span>
-              </label>
-
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-neutral-600 dark:text-neutral-400">Base URL</span>
-                <input
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.example.com/v1"
-                  className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 font-mono text-xs dark:border-neutral-700"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-neutral-600 dark:text-neutral-400">Model</span>
-                <input
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder={preset.defaultModel}
-                  className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 font-mono text-xs dark:border-neutral-700"
-                />
-                {presetId === 'openrouter' && (
-                  <span className="text-xs text-amber-600 dark:text-amber-400">
-                    Must end in ":free" — other OpenRouter models may bill.
-                  </span>
-                )}
-              </label>
-            </>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={handleSaveProvider}
-              className="rounded-full bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
-            >
-              Save & enable
-            </button>
-            <button
-              onClick={handleTestConnection}
-              disabled={testing}
-              className="rounded-full border border-neutral-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-neutral-700"
-            >
-              {testing ? 'Testing…' : 'Test connection'}
-            </button>
-            <button
-              onClick={handleRemoveProvider}
-              className="rounded-full border border-rose-400 px-4 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400"
-            >
-              Remove key
-            </button>
-          </div>
-
-          {aiMessage && <p className="text-sm text-neutral-600 dark:text-neutral-400">{aiMessage}</p>}
+        <div className="mt-4">
+          <AIProviderSetup
+            initialPresetId={settings.activeProviderId ?? DEFAULT_PRESET_ID}
+            onSaved={(config) => {
+              setActiveProviderId(config.id)
+              setAiEnabled(true)
+            }}
+            onRemoved={() => {
+              setActiveProviderId(undefined)
+              setAiEnabled(false)
+            }}
+          />
 
           {activeConfig && (
-            <p className="text-xs text-neutral-500">
+            <p className="mt-2 text-xs text-neutral-500">
               Usage today: {usedToday} / {activeConfig.rpdBudget} calls to {activeConfig.name}
             </p>
           )}
