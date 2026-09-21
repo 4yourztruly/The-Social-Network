@@ -30,7 +30,7 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
 
   return (
     <div className="mt-4">
-      <h2 className="text-sm font-semibold text-neutral-500">Relationships ({npcs.length})</h2>
+      <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Relationships ({npcs.length})</h2>
       <div className="mt-2 flex flex-col gap-2">
         {npcs.map((npc) => {
           const clamped = Math.max(-100, Math.min(100, npc.relationship))

@@ -70,7 +70,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
       )}
 
       <div
-        className="relative h-24 bg-gradient-to-r from-blue-600/70 to-sky-600/70 bg-cover bg-center"
+        className="relative z-0 h-24 bg-gradient-to-r from-blue-600/70 to-sky-600/70 bg-cover bg-center"
         style={profile.bannerImage ? { backgroundImage: `url(${profile.bannerImage})` } : undefined}
       >
         {profile.isPlayer && onBack && (
@@ -93,7 +93,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         )}
       </div>
 
-      <div className="px-4">
+      <div className="relative z-10 px-4">
         <div className="-mt-10 flex items-end justify-between">
           <div className="rounded-full ring-4 ring-white dark:ring-neutral-900">
             <Avatar avatar={profile.avatar} seed={profile.id} size={80} />
@@ -183,7 +183,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
 
           {profile.isPlayer && (
             <>
-              <h2 className="text-sm font-semibold text-neutral-500">Social Media Presence</h2>
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Social Media Presence</h2>
               <div className="mt-2 flex flex-col gap-4 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800 dark:bg-neutral-800">
                 <StatBar emoji="😂" label="Humor" value={player.humor} change={player.lastHumorChange} />
                 <StatBar emoji="🌟" label="Aura" value={player.aura} change={player.lastAuraChange} />
