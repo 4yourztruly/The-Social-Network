@@ -48,13 +48,13 @@ export function Onboarding() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value.slice(0, 40))}
               placeholder="Your name"
-              className="rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-[15px] outline-none focus:border-fuchsia-500 dark:border-neutral-700"
+              className="rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-[15px] outline-none focus:border-blue-500 dark:border-neutral-700"
             />
           </label>
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-neutral-500">Username</span>
-            <div className="flex items-center gap-1 rounded-lg border border-neutral-300 px-3 py-2 focus-within:border-fuchsia-500 dark:border-neutral-700">
+            <div className="flex items-center gap-1 rounded-lg border border-neutral-300 px-3 py-2 focus-within:border-blue-500 dark:border-neutral-700">
               <span className="text-neutral-500">@</span>
               <input
                 value={username}
@@ -71,7 +71,7 @@ export function Onboarding() {
               value={bio}
               onChange={(e) => setBio(e.target.value.slice(0, 160))}
               placeholder="e.g. Right winger for Real Madrid and Sweden's national team. Or: independent rapper, just dropped my first mixtape."
-              className="min-h-24 resize-none rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-[15px] outline-none focus:border-fuchsia-500 dark:border-neutral-700"
+              className="min-h-24 resize-none rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-[15px] outline-none focus:border-blue-500 dark:border-neutral-700"
             />
           </label>
 

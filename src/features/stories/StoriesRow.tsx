@@ -26,7 +26,7 @@ export function StoriesRow({ viewedAuthorIds, onOpenStories, onAddStory }: Stori
         <button onClick={onAddStory} className="flex shrink-0 flex-col items-center gap-1">
           <div className="relative">
             <Avatar avatar={playerProfile.avatar} seed={playerProfile.id} size={56} />
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-fuchsia-600 ring-2 ring-white dark:ring-neutral-950">
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 ring-2 ring-white dark:ring-neutral-950">
               <PlusIcon className="h-2.5 w-2.5 text-white" />
             </span>
           </div>
@@ -47,7 +47,7 @@ export function StoriesRow({ viewedAuthorIds, onOpenStories, onAddStory }: Stori
               className={`rounded-full p-[2px] ${
                 viewed
                   ? 'bg-neutral-300 dark:bg-neutral-700'
-                  : 'bg-gradient-to-tr from-amber-400 via-fuchsia-500 to-sky-500'
+                  : 'bg-gradient-to-tr from-amber-400 via-blue-500 to-sky-500'
               }`}
             >
               <div className="rounded-full bg-white p-[2px] dark:bg-neutral-950">

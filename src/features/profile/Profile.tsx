@@ -70,7 +70,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         )}
       </div>
 
-      <div className="h-24 bg-gradient-to-r from-fuchsia-600/70 to-sky-600/70" />
+      <div className="h-24 bg-gradient-to-r from-blue-600/70 to-sky-600/70" />
 
       <div className="px-4">
         <div className="-mt-10 flex items-end justify-between">
@@ -109,15 +109,9 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         <p className="text-sm text-neutral-500">@{profile.username}</p>
         <p className="mt-2 text-[15px]">{profile.bio}</p>
 
-        <div className="mt-3 flex gap-4 text-sm">
-          <span>
-            <span className="font-semibold">{profile.following.toLocaleString()}</span>{' '}
-            <span className="text-neutral-500">Following</span>
-          </span>
-          <span>
-            <span className="font-semibold">{profile.followers.toLocaleString()}</span>{' '}
-            <span className="text-neutral-500">Followers</span>
-          </span>
+        <div className="mt-3 text-sm">
+          <span className="font-semibold">{profile.followers.toLocaleString()}</span>{' '}
+          <span className="text-neutral-500">Followers</span>
         </div>
       </div>
 
@@ -128,7 +122,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
             onClick={() => setTab(t)}
             className={`flex-1 py-3 capitalize transition-colors ${
               tab === t
-                ? 'border-b-2 border-fuchsia-500 text-neutral-900 dark:text-neutral-100'
+                ? 'border-b-2 border-blue-500 text-neutral-900 dark:text-neutral-100'
                 : 'text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900'
             }`}
           >

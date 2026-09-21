@@ -51,7 +51,7 @@ export function EventModal({ onOpenProfile }: EventModalProps) {
     <div className="absolute inset-0 z-[100] flex items-end justify-center bg-black/60 sm:items-center">
       <div className="w-full rounded-t-3xl bg-white p-5 dark:bg-neutral-900 sm:max-w-md sm:rounded-3xl">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-fuchsia-500">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-500">
             <SparkleIcon className="h-4 w-4 text-white" />
           </span>
           <h2 className="text-xs font-bold uppercase tracking-wide text-neutral-500">Event</h2>

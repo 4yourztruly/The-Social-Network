@@ -77,7 +77,7 @@ export function DMs({ onOpenThread }: DMsProps) {
                 </p>
               </div>
               {thread.unread > 0 && (
-                <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-fuchsia-600 px-1.5 text-xs font-semibold text-white">
+                <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
                   {thread.unread}
                 </span>
               )}

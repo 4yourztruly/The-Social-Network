@@ -114,13 +114,13 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
               <div
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-[15px] ${
                   m.from === 'player'
-                    ? 'bg-fuchsia-600 text-white'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-neutral-100 italic text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
                 }`}
               >
                 {m.text}
                 <span
-                  className={`ml-2 not-italic text-[10px] ${m.from === 'player' ? 'text-fuchsia-100/80' : 'text-neutral-500'}`}
+                  className={`ml-2 not-italic text-[10px] ${m.from === 'player' ? 'text-blue-100/80' : 'text-neutral-500'}`}
                 >
                   {formatRelativeTime(m.at)}
                 </span>

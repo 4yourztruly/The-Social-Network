@@ -32,7 +32,7 @@ export function EventButton() {
       )}
       <button
         onClick={handleClick}
-        className="flex cursor-pointer items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-fuchsia-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-transform hover:scale-105"
+        className="flex cursor-pointer items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-transform hover:scale-105"
       >
         <SparkleIcon className="h-4 w-4" />
         Event

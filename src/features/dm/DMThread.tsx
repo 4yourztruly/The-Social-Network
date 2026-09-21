@@ -77,13 +77,13 @@ export function DMThread({ npcId, onOpenProfile, onBack }: DMThreadProps) {
               <div
                 className={`max-w-[75%] rounded-2xl px-3 py-2 text-[15px] ${
                   m.from === 'player'
-                    ? 'bg-fuchsia-600 text-white'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
                 }`}
               >
                 {m.text}
                 <span
-                  className={`ml-2 text-[10px] ${m.from === 'player' ? 'text-fuchsia-100/80' : 'text-neutral-500'}`}
+                  className={`ml-2 text-[10px] ${m.from === 'player' ? 'text-blue-100/80' : 'text-neutral-500'}`}
                 >
                   {formatRelativeTime(m.at)}
                 </span>
