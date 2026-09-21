@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import { isNPC } from '../../types'
 import { Avatar } from '../../components/Avatar'
+import { CenteredBar } from '../../components/CenteredBar'
 import { VerifiedBadge } from '../../components/VerifiedBadge'
 import { PostCard } from '../../components/PostCard'
 import { RelationshipMeter } from '../../components/RelationshipMeter'
@@ -189,6 +190,10 @@ interface StatBarProps {
 // own stats instead of a relationship.
 function StatBar({ emoji, label, value, change }: StatBarProps) {
   const pct = Math.max(0, Math.min(100, value))
+  // Humor/Aura are 0..100 with 50 as the neutral midpoint — scale onto the
+  // same -100..100 frame CenteredBar expects for relationships, so 50
+  // renders dead center, 100 fully right (green), 0 fully left (red).
+  const centered = (pct - 50) * 2
   return (
     <div>
       <div className="flex items-center justify-between text-sm">
@@ -209,9 +214,7 @@ function StatBar({ emoji, label, value, change }: StatBarProps) {
           <span className="font-semibold">{pct}%</span>
         </span>
       </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-        <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${pct}%` }} />
-      </div>
+      <CenteredBar value={centered} className="mt-1.5" />
       {change?.reason && <p className="mt-1.5 truncate text-xs text-neutral-500">{change.reason}</p>}
     </div>
   )

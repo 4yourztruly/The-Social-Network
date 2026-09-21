@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useGameStore } from '../store/gameStore'
 import { isNPC } from '../types'
 import { Avatar } from './Avatar'
+import { CenteredBar } from './CenteredBar'
 import { VerifiedBadge } from './VerifiedBadge'
 import { ChevronRightIcon } from './icons'
 
@@ -34,7 +35,6 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
           const clamped = Math.max(-100, Math.min(100, npc.relationship))
           const pct = Math.round(((clamped + 100) / 200) * 100)
           const change = npc.lastRelationshipChange
-          const barColor = pct < 20 ? 'bg-amber-500' : pct < 40 ? 'bg-lime-500' : 'bg-emerald-500'
 
           return (
             <button
@@ -52,9 +52,7 @@ export function RelationshipList({ onOpenProfile }: RelationshipListProps) {
               </div>
 
               <div className="mt-2 flex items-center gap-2">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-                  <div className={`h-full ${barColor} transition-[width]`} style={{ width: `${pct}%` }} />
-                </div>
+                <CenteredBar value={clamped} className="flex-1" />
                 <span className="shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">{pct}%</span>
               </div>
 
