@@ -41,6 +41,7 @@ const baseArgs = {
   reactionPool: footballerPack.reactionPool,
   orgName: footballerPack.worldName,
   playerDisplayName: 'Alex Rennick',
+  playerUsername: 'alexrennick',
   playerFollowers: 100_000,
   playerSocialScore: 60,
   now: 1000,

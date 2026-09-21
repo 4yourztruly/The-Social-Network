@@ -204,6 +204,7 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
               postId={id}
               onOpenProfile={onOpenProfile}
               onOpenThread={() => onOpenThread(posts[id]?.parentId ?? id)}
+              onReply={() => onOpenThread(posts[id]?.parentId ?? id)}
             />
           ))
         ) : (

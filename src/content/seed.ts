@@ -6,6 +6,7 @@ import { makeId } from '../engine/id'
 import { isViewableProfile } from '../engine/npcTier'
 import { pushRecentLine, selectLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
+import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
 
 const PLAYER_ID = 'player'
 const GAME_START = Date.UTC(2026, 6, 1) // fixed epoch for in-game time
@@ -172,16 +173,6 @@ const MAX_REPLIES_PER_COMMENTER = 3
 // commenters, not literal understanding of what was said.
 const MAX_MENTION_REPLIES_PER_THREAD = 2
 const MENTION_REPLY_CHANCE = 0.35
-const REPLY_BANTER_LINES = [
-  "@{target} nah I don't see it",
-  '@{target} 😂😂 say it again',
-  '@{target} facts, no notes',
-  "@{target} you're actually right about that",
-  '@{target} not you starting beef 💀',
-  '@{target} lol true though',
-  '@{target} exactly what I was thinking',
-  '@{target} okay but why is this accurate',
-]
 
 // Materializes an actual reply Post for every one of a seed post's `replies`
 // count — without this, that number was purely cosmetic (PostThread looks
@@ -237,8 +228,8 @@ function seedReplies(
       let text: string
       if (mentionTarget) {
         const targetNpc = npcs[mentionTarget.authorId]
-        const line = pick(rng, REPLY_BANTER_LINES)
-        text = applyPersonalityVoice(line.replace('{target}', targetNpc.username), commenter, rng)
+        const line = pick(rng, CROSS_MENTION_BANTER_LINES)
+        text = applyPersonalityVoice(fillBanterTarget(line, targetNpc.username), commenter, rng)
         mentionsLeft -= 1
       } else {
         const linePool = pack.reactionPool[commenter.persona]

@@ -22,10 +22,13 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
   const posts = useGameStore((s) => s.posts)
   const postOrder = useGameStore((s) => s.postOrder)
   const player = useGameStore((s) => s.profiles[PLAYER_ID])
+  const profiles = useGameStore((s) => s.profiles)
   const addPlayerReply = useGameStore((s) => s.addPlayerReply)
   const toggleLike = useGameStore((s) => s.toggleLike)
   const [replyText, setReplyText] = useState('')
   const [collapsed, setCollapsed] = useState(false)
+  const [composerTarget, setComposerTarget] = useState<string | null>(null) // @username being replied to
+  const [composerText, setComposerText] = useState('')
   const replyInputRef = useRef<HTMLInputElement>(null)
 
   const replyIds = useMemo(
@@ -51,6 +54,29 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
   }, [author, onOpenProfile])
 
   const focusReplyInput = useCallback(() => replyInputRef.current?.focus(), [])
+
+  // Replying to a comment doesn't open a nested thread (there's no nested
+  // view — replies-to-replies would be invisible) — it opens a small
+  // composer prefilled with @whoever-wrote-that-comment, and the result is
+  // posted as a normal reply on the top-level post being viewed.
+  const handleOpenComposer = useCallback(
+    (targetPostId: string) => {
+      const targetAuthor = profiles[posts[targetPostId]?.authorId ?? '']
+      if (!targetAuthor) return
+      setComposerTarget(targetAuthor.username)
+      setComposerText(`@${targetAuthor.username} `)
+    },
+    [posts, profiles],
+  )
+  const closeComposer = useCallback(() => {
+    setComposerTarget(null)
+    setComposerText('')
+  }, [])
+  const handleSubmitComposer = () => {
+    if (!composerText.trim()) return
+    addPlayerReply(postId, composerText)
+    closeComposer()
+  }
 
   if (!post || !author || !player) return null
 
@@ -146,11 +172,49 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
         </div>
 
         {replyIds.length > 0 ? (
-          replyIds.map((id) => <PostCard key={id} postId={id} onOpenProfile={onOpenProfile} />)
+          replyIds.map((id) => (
+            <PostCard key={id} postId={id} onOpenProfile={onOpenProfile} onReply={handleOpenComposer} />
+          ))
         ) : (
           <p className="p-8 text-center text-sm text-neutral-500">No replies yet. Be the first.</p>
         )}
       </div>
+
+      {composerTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={closeComposer}
+        >
+          <div
+            className="w-full max-w-xl rounded-t-2xl bg-white p-4 dark:bg-neutral-900 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <Avatar avatar={player.avatar} seed={player.id} size={40} />
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-neutral-900 dark:text-neutral-100">{player.displayName}</p>
+                <p className="truncate text-sm text-neutral-500">@{player.username}</p>
+              </div>
+            </div>
+            <textarea
+              value={composerText}
+              onChange={(e) => setComposerText(e.target.value.slice(0, 280))}
+              autoFocus
+              rows={3}
+              className="mt-3 w-full resize-none rounded-xl border border-neutral-300 bg-transparent p-2 text-[15px] outline-none dark:border-neutral-700"
+            />
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={handleSubmitComposer}
+                disabled={!composerText.trim()}
+                className="cursor-pointer rounded-full bg-sky-500 px-4 py-1.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
+              >
+                Post
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex shrink-0 items-center gap-2 border-t border-neutral-200 px-4 py-2 dark:border-neutral-800">
         <Avatar avatar={player.avatar} seed={player.id} size={32} />

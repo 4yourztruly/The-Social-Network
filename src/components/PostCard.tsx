@@ -12,9 +12,13 @@ interface PostCardProps {
   postId: string
   onOpenProfile: (profileId: string) => void
   onOpenThread?: (postId: string) => void
+  // Only used for a reply-kind post's own "Reply" text link — replying to a
+  // reply doesn't open a new thread (there's no nested view), it opens a
+  // compose prefilled with @whoever-wrote-that-comment. See PostThread.
+  onReply?: (postId: string) => void
 }
 
-function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
+function PostCardImpl({ postId, onOpenProfile, onOpenThread, onReply }: PostCardProps) {
   const post = useGameStore((s) => s.posts[postId])
   const author = useGameStore((s) => s.profiles[post?.authorId ?? ''])
   const toggleLike = useGameStore((s) => s.toggleLike)
@@ -24,6 +28,7 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
     if (author) onOpenProfile(author.id)
   }, [author, onOpenProfile])
   const handleOpenThread = useCallback(() => onOpenThread?.(postId), [onOpenThread, postId])
+  const handleReply = useCallback(() => onReply?.(postId), [onReply, postId])
 
   // Sub-elements inside the now fully-clickable row (avatar, name, reply,
   // like) need to stop the click from also bubbling up to the row's own
@@ -48,6 +53,13 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
       handleLike()
     },
     [handleLike],
+  )
+  const handleReplyStopped = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      handleReply()
+    },
+    [handleReply],
   )
 
   if (!post || !author) return null
@@ -116,8 +128,8 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread }: PostCardProps) {
             </button>
             <span className="text-xs">|</span>
             <button
-              onClick={handleOpenThreadStopped}
-              disabled={!onOpenThread}
+              onClick={handleReplyStopped}
+              disabled={!onReply}
               className="cursor-pointer text-xs hover:text-sky-500"
             >
               Reply

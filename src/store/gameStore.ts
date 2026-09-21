@@ -927,6 +927,7 @@ export const useGameStore = create<GameState>((set, get) => {
       // the player never named one — that fallback stays out of player.club.
       orgName: state.player.club || pack.worldName,
       playerDisplayName: playerProfile.displayName,
+      playerUsername: playerProfile.username,
       playerFollowers: playerProfile.followers,
       playerSocialScore: (state.player.humor + state.player.aura) / 2,
       rng,

@@ -12,6 +12,7 @@ import {
 } from './rules'
 import { commentCountForPost, estimateEngagement, followerDeltaFromEngagement, statDeltasForTags } from '../formulas'
 import type { Engagement } from '../formulas'
+import { CROSS_MENTION_BANTER_LINES, PLAYER_MENTION_BANTER_LINES, fillBanterTarget } from '../banter'
 
 export interface CommentPayload {
   parentPostId: string
@@ -56,16 +57,54 @@ export interface ReactionEngineArgs {
   reactionPool: Record<Persona, ReactionPool>
   orgName: string
   playerDisplayName: string
+  playerUsername: string
   playerFollowers: number
   playerSocialScore: number // (humor + aura) / 2 — see formulas.estimateEngagement
   rng: RNG
   now: number
 }
 
+// At least this many of a post's crowd comments literally @-mention someone
+// — the player or another commenter in the same batch — instead of only
+// referencing them by name in third person.
+const MIN_MENTION_COMMENTS = 4
+
 // Relationship (-100..100) skews who's likely to jump into the replies —
 // never gates it to zero, so a hater can still show up.
 function relationshipWeight(npc: NPC): number {
   return Math.max(1, npc.relationship + 60)
+}
+
+// Rewrites a handful of already-generated crowd comments into @-mention
+// banter, in place — roughly half aimed at the player, half at another
+// commenter earlier in the same batch (falls back to the player when
+// there's no one else yet). Never touches more than MIN_MENTION_COMMENTS
+// items, and skips entirely once the batch is too small to spare any.
+function applyMentionBanter(items: ScheduledCommentItem[], npcs: NPC[], playerUsername: string, rng: RNG): void {
+  if (items.length === 0) return
+
+  const mentionCount = Math.min(MIN_MENTION_COMMENTS, items.length)
+  const indices = [...items.keys()]
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[indices[i], indices[j]] = [indices[j], indices[i]]
+  }
+  const chosen = indices.slice(0, mentionCount)
+
+  for (const idx of chosen) {
+    const npc = npcs[idx]
+    const otherIndices = indices.filter((i) => i !== idx)
+    const targetPlayer = otherIndices.length === 0 || rng() < 0.5
+
+    if (targetPlayer) {
+      const line = pick(rng, PLAYER_MENTION_BANTER_LINES)
+      items[idx].payload.text = applyPersonalityVoice(fillBanterTarget(line, playerUsername), npc, rng)
+    } else {
+      const targetNpc = npcs[pick(rng, otherIndices)]
+      const line = pick(rng, CROSS_MENTION_BANTER_LINES)
+      items[idx].payload.text = applyPersonalityVoice(fillBanterTarget(line, targetNpc.username), npc, rng)
+    }
+  }
 }
 
 export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
@@ -76,6 +115,7 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
     reactionPool,
     orgName,
     playerDisplayName,
+    playerUsername,
     playerFollowers,
     playerSocialScore,
     rng,
@@ -89,6 +129,7 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
   const commentCount = pool.length > 0 ? commentCountForPost(rng, playerSocialScore) : 0
 
   const scheduledItems: ScheduledCommentItem[] = []
+  const commenterNpcs: NPC[] = []
   const npcLineUpdates: Record<string, string[]> = {}
 
   for (let i = 0; i < commentCount && pool.length > 0; i++) {
@@ -108,7 +149,13 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
       kind: 'comment',
       payload: { parentPostId: postId, npcId: npc.id, text, tags: event.tags, aiEligible: true },
     })
+    commenterNpcs.push(npc)
   }
+
+  // Guarantees at least a few of these comments literally @-mention
+  // someone — the player, or another commenter in the same batch — rather
+  // than only ever name-dropping them in third person.
+  applyMentionBanter(scheduledItems, commenterNpcs, playerUsername, rng)
 
   scheduledItems.sort((a, b) => a.dueAt - b.dueAt)
 
