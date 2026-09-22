@@ -60,6 +60,13 @@ export interface NPC extends Profile {
   followedByPlayer: boolean // player-controlled; not spec section 6 verbatim but required to persist follow state
   custom?: boolean // player-created via Settings > People, as opposed to career-pack seeded — only these can be deleted
   lastRelationshipChange?: { delta: number; reason: string; at: number } // shown as a caption on the relationship list
+  // AI-generated celeb unrelated to this career's world (e.g. an actor in a
+  // footballer game) — see content/genericFiller.ts. Every deterministic
+  // template call site checks this and uses career-agnostic filler instead
+  // of this career pack's sport-flavored lines, so a real, off-topic
+  // celebrity never gets stuck talking like a footballer when AI isn't
+  // available for a given line (over budget, network failure, etc).
+  offTopic?: boolean
 }
 
 export type PostOrigin = 'template' | 'ai' | 'player'

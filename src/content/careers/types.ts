@@ -30,6 +30,7 @@ export type NPCSeed = Pick<
   | 'postingStyle'
 > & {
   avatar?: NPC['avatar'] // omitted for the static per-career packs — falls back to initials
+  offTopic?: NPC['offTopic']
 }
 
 export interface CareerPack {

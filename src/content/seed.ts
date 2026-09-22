@@ -7,6 +7,17 @@ import { isViewableProfile } from '../engine/npcTier'
 import { pushRecentLine, selectLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
 import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
+import { GENERIC_OFFTOPIC_POSTS, GENERIC_OFFTOPIC_REACTION_POOL } from './genericFiller'
+
+// An offTopic NPC (a real celeb the AI picked for variety, unrelated to
+// this career's world) never draws from this pack's sport/industry-flavored
+// pools — see content/genericFiller.ts.
+function postPoolFor(pack: CareerPack, npc: NPC): string[] | undefined {
+  return npc.offTopic ? GENERIC_OFFTOPIC_POSTS : pack.seedPostPool[npc.persona]
+}
+function reactionPoolFor(pack: CareerPack, npc: NPC) {
+  return npc.offTopic ? GENERIC_OFFTOPIC_REACTION_POOL : pack.reactionPool[npc.persona]
+}
 
 const PLAYER_ID = 'player'
 const GAME_START = Date.UTC(2026, 6, 1) // fixed epoch for in-game time
@@ -96,6 +107,7 @@ function createNpcProfiles(npcSeeds: NPCSeed[], pack: CareerPack, rng: RNG, orgF
       postingStyle: seed.postingStyle,
       recentLineIds: [],
       followedByPlayer: false,
+      offTopic: seed.offTopic,
     }
   }
   return npcs
@@ -133,7 +145,7 @@ function seedPosts(
   const posts: Post[] = []
   for (let i = 0; i < count; i++) {
     const author = pick(rng, npcList)
-    const lines = pack.seedPostPool[author.persona]
+    const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
     const line = pick(rng, lines)
     const text = fillTemplate(line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
@@ -169,7 +181,7 @@ export function seedDailyPosts(
   const posts: Post[] = []
   for (let i = 0; i < count; i++) {
     const author = pick(rng, npcList)
-    const lines = pack.seedPostPool[author.persona]
+    const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
     const line = pick(rng, lines)
     const text = fillTemplate(line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
@@ -259,7 +271,7 @@ export function seedReplies(
         text = applyPersonalityVoice(fillBanterTarget(line, targetNpc.username), commenter, rng)
         mentionsLeft -= 1
       } else {
-        const linePool = pack.reactionPool[commenter.persona]
+        const linePool = reactionPoolFor(pack, commenter)
         if (!linePool) continue
         // Merges this NPC's own anti-repetition history with every line
         // already used elsewhere in this thread, so two different
@@ -315,7 +327,7 @@ function seedStories(
   for (let i = 0; i < count * 3 && chosen.size < count && chosen.size < npcList.length; i++) {
     const author = pick(rng, npcList)
     if (chosen.has(author.id)) continue
-    const lines = pack.seedPostPool[author.persona]
+    const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
     chosen.add(author.id)
     const line = pick(rng, lines)

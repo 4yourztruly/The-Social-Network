@@ -13,6 +13,14 @@ import {
 import { commentCountForPost, estimateEngagement, followerDeltaFromEngagement, statDeltasForTags } from '../formulas'
 import type { Engagement } from '../formulas'
 import { CROSS_MENTION_BANTER_LINES, PLAYER_MENTION_BANTER_LINES, fillBanterTarget } from '../banter'
+import { GENERIC_OFFTOPIC_REACTION_POOL } from '../../content/genericFiller'
+
+// An offTopic NPC (a real celeb the AI picked for variety, unrelated to
+// this career's world) never draws from this pack's sport/industry-flavored
+// reaction lines — see content/genericFiller.ts.
+function reactionPoolFor(reactionPool: Record<Persona, ReactionPool>, npc: NPC): ReactionPool {
+  return npc.offTopic ? GENERIC_OFFTOPIC_REACTION_POOL : reactionPool[npc.persona]
+}
 
 export interface CommentPayload {
   parentPostId: string
@@ -135,7 +143,7 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
   for (let i = 0; i < commentCount && pool.length > 0; i++) {
     const npc = pickWeighted(rng, pool, relationshipWeight)
     const recentLineIds = npcLineUpdates[npc.id] ?? npc.recentLineIds
-    const linePool = reactionPool[npc.persona]
+    const linePool = reactionPoolFor(reactionPool, npc)
     const selection = selectLine(rng, linePool, event.tags, recentLineIds)
     npcLineUpdates[npc.id] = pushRecentLine(recentLineIds, selection.lineId)
 
@@ -217,7 +225,7 @@ export function runSocialCircleEngine(args: SocialCircleArgs): SocialCircleOutco
 
   for (const npc of commenters) {
     const recentLineIds = npcLineUpdates[npc.id] ?? npc.recentLineIds
-    const linePool = reactionPool[npc.persona]
+    const linePool = reactionPoolFor(reactionPool, npc)
     const selection = selectLine(rng, linePool, event.tags, recentLineIds)
     npcLineUpdates[npc.id] = pushRecentLine(recentLineIds, selection.lineId)
 

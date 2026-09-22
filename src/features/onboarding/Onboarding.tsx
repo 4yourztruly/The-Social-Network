@@ -9,10 +9,11 @@ type Step = 'ai-choice' | 'ai-setup' | 'profile'
 
 export function Onboarding() {
   const completeOnboarding = useGameStore((s) => s.completeOnboarding)
-  // A returning player who already has a provider configured (from a
-  // previous playthrough) skips straight past this — they've already made
-  // the choice, no need to ask again every time they start a new world.
-  const [step, setStep] = useState<Step>(loadProviderConfigs().length > 0 ? 'profile' : 'ai-choice')
+  // Always starts here, every time a profile is created — even for a
+  // returning player who configured AI before, so the choice (and a chance
+  // to update/verify the key) is never silently skipped.
+  const [step, setStep] = useState<Step>('ai-choice')
+  const hasExistingProvider = loadProviderConfigs().length > 0
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
@@ -58,13 +59,18 @@ export function Onboarding() {
             you actually said. Without one, you still get a full cast of realistic (invented) accounts and
             personality-flavored template replies.
           </p>
+          {hasExistingProvider && (
+            <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">
+              You already have a provider saved on this device — pick "Connect" to reuse or update it.
+            </p>
+          )}
 
           <div className="mt-8 flex flex-col gap-3">
             <button
               onClick={() => setStep('ai-setup')}
               className="rounded-xl border border-neutral-300 px-4 py-3 text-left text-sm font-semibold hover:border-blue-500 dark:border-neutral-700"
             >
-              Connect an AI provider
+              {hasExistingProvider ? 'Connect (use saved key)' : 'Connect an AI provider'}
               <span className="mt-0.5 block text-xs font-normal text-neutral-500">
                 Free key, takes a minute — you can test the connection before continuing.
               </span>
@@ -96,19 +102,19 @@ export function Onboarding() {
           </button>
           <h1 className="mt-3 text-2xl font-bold">Connect your AI provider</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Test the connection if you'd like, then continue — this only has to work once for your whole world to
-            be generated around it.
+            Enter your key and press "Save & continue" — that's the only step that moves you forward from here, so
+            your key is never lost by clicking away.
           </p>
 
           <div className="mt-6">
-            <AIProviderSetup saveLabel="Save" showRemove={false} />
+            <AIProviderSetup saveLabel="Save & continue" showRemove={false} onSaved={() => setStep('profile')} />
           </div>
 
           <button
             onClick={() => setStep('profile')}
-            className="mt-4 w-full rounded-full bg-neutral-900 py-2.5 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900"
+            className="mt-4 w-full text-center text-xs font-medium text-neutral-500 underline underline-offset-2"
           >
-            Continue
+            Skip for now, continue without AI
           </button>
         </div>
       </div>

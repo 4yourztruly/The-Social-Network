@@ -32,6 +32,7 @@ export const npcSeedSchema = z.object({
     hashtags: z.number().min(0).max(1),
   }),
   avatar: z.object({ kind: z.enum(['initials', 'svg', 'webp']), value: z.string() }).optional(),
+  offTopic: z.boolean().optional(),
 })
 export type NPCSeed = z.infer<typeof npcSeedSchema>
 

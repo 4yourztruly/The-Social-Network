@@ -5,6 +5,7 @@ import { pushRecentLine, selectLine } from './templates/select'
 import { fillTemplate } from './templates/filler'
 import { applyPersonalityVoice } from './voice'
 import type { ReactionPool } from '../content/careers/types'
+import { GENERIC_OFFTOPIC_REACTION_POOL } from '../content/genericFiller'
 
 // DMs keep a deliberate "typing" delay for effect, unlike post comments
 // which now land near-instantly. Spec section 4.6: "typing indicator
@@ -34,7 +35,7 @@ export function generateDmReply(args: {
   now: number
 }): DMReplyResult {
   const { npc, reactionPool, playerDisplayName, orgName, rng, now } = args
-  const pool = reactionPool[npc.persona]
+  const pool = npc.offTopic ? GENERIC_OFFTOPIC_REACTION_POOL : reactionPool[npc.persona]
   const selection = selectLine(rng, pool, [], npc.recentLineIds)
   const dueAt = now + randomInt(rng, DM_REPLY_DELAY_RANGE_MS[0], DM_REPLY_DELAY_RANGE_MS[1])
   const filled = fillTemplate(selection.line, { player: playerDisplayName, org: orgName })
