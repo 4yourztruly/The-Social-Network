@@ -34,6 +34,7 @@ import { CAREER_PACKS } from '../content/careers'
 import type { NPCSeed } from '../content/careers/types'
 import { buildFallbackRoster } from '../content/rosterFallback'
 import { generateRoster } from '../ai/rosterService'
+import { generateAiSeedPost } from '../ai/seedContentService'
 import { isNPC } from '../types'
 import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
@@ -232,6 +233,11 @@ function buildInitialState(input: OnboardingInput, npcSeeds?: NPCSeed[]) {
 
 // New posts dropped into the feed each time the day advances.
 const DAILY_POST_COUNT = 8
+
+// At most this many of the celeb tier's opening posts get personalized via
+// AI at onboarding — see completeOnboarding. Capped to keep the one-time
+// onboarding cost predictable regardless of roster size.
+const MAX_AI_SEED_POSTS = 6
 
 export const useGameStore = create<GameState>((set, get) => {
   // Advances the in-game "Day" counter and drops a fresh batch of NPC posts
@@ -705,6 +711,36 @@ export const useGameStore = create<GameState>((set, get) => {
     }
 
     const world = buildInitialState(input, npcSeeds)
+
+    // Personalizes a handful of the celeb tier's very first posts (still
+    // just template text at this point — createSeededWorld never calls AI)
+    // so a celeb's opening post sounds like them, not a generic per-persona
+    // line. Never blocks the game on this: any failure just leaves the
+    // template line in place. See ai/seedContentService.ts.
+    if (aiEligible && config) {
+      const orgName = input.org || pack.worldName
+      const npcList = Object.values(world.profiles).filter(isNPC)
+      const celebTargets = npcList.filter((n) => tierForPersona(n.persona) === 'celeb').slice(0, MAX_AI_SEED_POSTS)
+      const firstPostIdByAuthor = new Map<string, string>()
+      for (const postId of world.postOrder) {
+        const post = world.posts[postId]
+        if (post?.kind === 'post' && !firstPostIdByAuthor.has(post.authorId)) firstPostIdByAuthor.set(post.authorId, postId)
+      }
+      const results = await Promise.all(
+        celebTargets.map(async (npc) => {
+          const postId = firstPostIdByAuthor.get(npc.id)
+          if (!postId || !canSpend(config.id, config.rpdBudget)) return null
+          const text = await generateAiSeedPost(npc, orgName, config)
+          if (!text) return null
+          recordSpend(config.id)
+          return { postId, text }
+        }),
+      )
+      for (const result of results) {
+        if (result) world.posts[result.postId] = { ...world.posts[result.postId], text: result.text, origin: 'ai' }
+      }
+    }
+
     set({
       ...world,
       clock: Date.now(),
