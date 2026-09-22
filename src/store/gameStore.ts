@@ -258,12 +258,16 @@ export const useGameStore = create<GameState>((set, get) => {
       const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor)
       const dailyReplies = seedReplies(pack, rng, npcs, dailyPosts, orgForFlavor)
       const newItems = [...dailyPosts, ...dailyReplies].sort((a, b) => b.createdAt - a.createdAt)
+      const nextGameDay = state.gameDay + 1
 
       const posts = { ...state.posts }
-      for (const post of newItems) posts[post.id] = post
+      for (const post of newItems) {
+        post.gameDay = nextGameDay
+        posts[post.id] = post
+      }
 
       return {
-        gameDay: state.gameDay + 1,
+        gameDay: nextGameDay,
         posts,
         postOrder: [...newItems.map((p) => p.id), ...state.postOrder],
       }
@@ -541,6 +545,7 @@ export const useGameStore = create<GameState>((set, get) => {
           text,
           tags,
           createdAt: Date.now(),
+          gameDay: s.gameDay,
           likes: 0,
           reposts: 0,
           replies: 0,
@@ -874,6 +879,7 @@ export const useGameStore = create<GameState>((set, get) => {
           text,
           tags: [],
           createdAt: now,
+          gameDay: state.gameDay,
           expiresAt: now + STORY_TTL_MS,
           likes: 0,
           reposts: 0,
@@ -951,6 +957,7 @@ export const useGameStore = create<GameState>((set, get) => {
         text: trimmed,
         tags: [],
         createdAt: Date.now(),
+        gameDay: state.gameDay,
         likes: 0,
         reposts: 0,
         replies: 0,
@@ -979,6 +986,7 @@ export const useGameStore = create<GameState>((set, get) => {
         text: trimmed,
         tags: [],
         createdAt: now,
+        gameDay: state.gameDay,
         expiresAt: now + STORY_TTL_MS,
         likes: 0,
         reposts: 0,
@@ -1008,6 +1016,7 @@ export const useGameStore = create<GameState>((set, get) => {
       text,
       tags,
       createdAt: now,
+      gameDay: state.gameDay,
       likes: 0,
       reposts: 0,
       replies: 0,

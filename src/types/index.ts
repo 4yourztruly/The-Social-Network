@@ -85,6 +85,10 @@ export interface Post {
   tags: string[]
   eventId?: string
   createdAt: number
+  // The in-game "Day" (GameState.gameDay) active when this was created —
+  // powers the Feed's "Yesterday" / "Day N" dividers. Optional only for
+  // backward compat with saves from before this field existed.
+  gameDay?: number
   expiresAt?: number // stories
   likes: number
   reposts: number

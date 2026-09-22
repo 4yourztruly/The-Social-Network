@@ -360,7 +360,10 @@ function seedStories(
       expiresAt: createdAt + STORY_TTL_MS,
       likes: 0,
       reposts: 0,
-      replies: 0,
+      // Same idea as a top-level post's `replies` — a target count that
+      // seedReplies materializes into actual comment Posts, so opening a
+      // story's comments isn't always empty.
+      replies: randomInt(rng, 0, 8),
       origin: 'template',
     })
   }
@@ -393,12 +396,17 @@ export function createSeededWorld(
   const playerProfile = createPlayerProfile(pack, input)
   const posts = seedPosts(pack, rng, npcs, 45, orgForFlavor)
   const stories = seedStories(pack, rng, npcs, 6, orgForFlavor)
-  const replies = seedReplies(pack, rng, npcs, posts, orgForFlavor)
+  // Stories get comments too, same mechanism as posts — seedReplies doesn't
+  // care about `kind`, just that `replies` is a target count to fill in.
+  const replies = seedReplies(pack, rng, npcs, [...posts, ...stories], orgForFlavor)
 
   const profiles: Record<string, Profile | NPC> = { [playerProfile.id]: playerProfile, ...npcs }
   const postsRecord: Record<string, Post> = {}
   const postOrder: string[] = []
+  // The whole seeded world is created at once, before the game clock ever
+  // advances — everything in it belongs to Day 1 (see Feed's day dividers).
   for (const post of [...posts, ...stories, ...replies].sort((a, b) => b.createdAt - a.createdAt)) {
+    post.gameDay = 1
     postsRecord[post.id] = post
     postOrder.push(post.id)
   }

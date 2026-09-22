@@ -69,6 +69,7 @@ const postSchema = z.object({
   tags: z.array(z.string()),
   eventId: z.string().optional(),
   createdAt: z.number(),
+  gameDay: z.number().optional(),
   expiresAt: z.number().optional(),
   likes: z.number(),
   reposts: z.number(),

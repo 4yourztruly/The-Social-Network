@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTheme } from './useTheme'
 import { usePersistence } from './usePersistence'
 import { useSchedulerTick } from './useSchedulerTick'
@@ -45,6 +45,24 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showPeople, setShowPeople] = useState(false)
   const [postOutcome, setPostOutcome] = useState<PostOutcome | null>(null)
+
+  // App never remounts across an onboarding reset (Settings > "Start a new
+  // profile"), so all this local nav/overlay state otherwise survives it —
+  // most visibly, finishing a fresh onboarding while showSettings was still
+  // true from before the reset landed the player back on Settings instead
+  // of the feed. Every completed/re-completed onboarding should always open
+  // on a clean home feed.
+  useEffect(() => {
+    if (!onboarded) return
+    setScreen('feed')
+    setShowSettings(false)
+    setShowPeople(false)
+    setViewingProfileId(null)
+    setViewingPostId(null)
+    setViewingDmNpcId(null)
+    setViewingStoryAuthorId(null)
+    setShowAddStory(false)
+  }, [onboarded])
 
   if (!onboarded) {
     return (
@@ -154,6 +172,10 @@ export default function App() {
             onMarkViewed={handleMarkStoryViewed}
             onChangeAuthor={setViewingStoryAuthorId}
             onClose={() => setViewingStoryAuthorId(null)}
+            onOpenProfile={(id) => {
+              setViewingStoryAuthorId(null)
+              handleOpenProfile(id)
+            }}
           />
         )}
         {showAddStory && (
