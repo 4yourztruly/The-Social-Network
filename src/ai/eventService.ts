@@ -35,7 +35,7 @@ export function buildEncounterPrompt(
       ? `Recent things ${playerDisplayName} has done — riff on these, reference them, or invent something unrelated to surprise them:\n${history}`
       : 'No notable recent history yet — invent something plausible for their public life.',
     celeb
-      ? `If it fits, this specific person can be involved: ${celeb.displayName} (@${celeb.username}), persona ${celeb.persona.replace('_', ' ')}, vibe ${celeb.vibe.replace('_', ' ')} with the player.`
+      ? `If it fits, this specific person can be involved: ${celeb.displayName} (@${celeb.username})${celeb.bio ? `, who they actually are: "${celeb.bio}"` : ''}, vibe ${celeb.vibe.replace('_', ' ')} with the player. Stay true to who they actually are (their bio above) — don't cast them as a generic football-world figure if their bio says otherwise.`
       : 'No one else is available to be involved — keep it solo (paparazzi, a stranger, a crowd, an interviewer, etc. are fine as unnamed background).',
     'Respond in EXACTLY this format, nothing else, no extra commentary:',
     'SITUATION: <1-2 sentence description of what just happened, present tense, puts the player on the spot>',

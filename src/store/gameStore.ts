@@ -11,7 +11,6 @@ import type {
   PlayerState,
   Post,
   Profile,
-  RelationshipVibe,
   SaveGame,
   ScheduledItem,
   Settings,
@@ -124,10 +123,11 @@ const BOOTSTRAP_INPUT: OnboardingInput = {
 
 export interface GameState {
   clock: number
-  // In-game "Day" counter shown in the header — advances on player actions
-  // (a post, starting an activity, a random event triggering), not on real
-  // wall-clock time. Each advance also drops a small batch of fresh NPC
-  // posts into the feed — see advanceDay().
+  // In-game "Day" counter shown in the header — advances once a player
+  // action actually concludes (a post is submitted, an activity ends, an
+  // event is resolved), never mid-action, and never on real wall-clock
+  // time. Each advance also drops a small batch of fresh NPC posts into
+  // the feed — see advanceDay().
   gameDay: number
   player: PlayerState
   profiles: Record<string, Profile | NPC>
@@ -202,6 +202,8 @@ export interface AddCustomPersonInput {
   bio: string
   followers?: number
   avatar?: Avatar
+  personality?: string[] // from AI enrichment (Settings > People > Fill with AI) — see ai/personService.ts
+  verified?: boolean
 }
 
 export interface CreateActivityInput {
@@ -233,9 +235,11 @@ const DAILY_POST_COUNT = 8
 
 export const useGameStore = create<GameState>((set, get) => {
   // Advances the in-game "Day" counter and drops a fresh batch of NPC posts
-  // (plus their replies) into the feed — called whenever the player does
-  // something that "counts as a day": posting, starting an activity, or a
-  // random event firing. Not tied to real wall-clock time at all.
+  // (plus their replies) into the feed — called once an action actually
+  // concludes: a post submitted, an activity ended, an event resolved.
+  // Deliberately NOT called when one merely starts (starting an activity,
+  // triggering an event) — the day shouldn't tick over mid-action, only
+  // once it's actually done. Not tied to real wall-clock time at all.
   function advanceDay() {
     set((state) => {
       const pack = CAREER_PACKS[state.player.career]
@@ -623,6 +627,7 @@ export const useGameStore = create<GameState>((set, get) => {
         summary: `Event: ${encounterText} — chose "${choice.label}". ${resolutionText}`,
       }
       set((s) => ({ activityLog: [...s.activityLog, logEntry] }))
+      advanceDay()
 
       // A bad outcome can leak to the tabloids, same as a risky Activity —
       // only when it's actually newsworthy (see coverageChance), never guaranteed.
@@ -776,15 +781,6 @@ export const useGameStore = create<GameState>((set, get) => {
     const id = makeId('npc')
     const now = Date.now()
     const rng = mulberry32(hashStringToSeed(id))
-    const startingRelationshipByVibe: Record<RelationshipVibe, number> = {
-      friend: 40,
-      rival: -30,
-      mentor: 30,
-      teammate_bond: 40,
-      fan: 20,
-      romantic: 50,
-      frenemy: -10,
-    }
 
     // No "public role"/"relationship" pickers — a custom person only gives a
     // name, handle, bio, followers and an optional picture. Which content
@@ -799,14 +795,15 @@ export const useGameStore = create<GameState>((set, get) => {
       displayName: input.displayName.trim() || 'New Person',
       bio: input.bio.trim(),
       avatar: input.avatar ?? { kind: 'initials', value: initialsFor(input.displayName || 'NP') },
-      verified: false,
+      verified: input.verified ?? false,
       followers: input.followers && input.followers > 0 ? Math.round(input.followers) : randomInt(rng, 500, 50_000),
       following: randomInt(rng, 50, 500),
       joinedAt: now,
       isPlayer: false,
       persona,
-      personality: [],
-      relationship: startingRelationshipByVibe[vibe],
+      personality: input.personality ?? [],
+      // Every relationship starts neutral — see content/seed.ts startingRelationship.
+      relationship: 0,
       vibe,
       mood: 0,
       postingStyle: { emoji: 0.4, caps: 0.1, hashtags: 0.1 },
@@ -1211,7 +1208,6 @@ export const useGameStore = create<GameState>((set, get) => {
     set((s) => ({
       activities: { ...s.activities, [activityId]: { ...activity, status: 'active', rsvps } },
     }))
-    advanceDay()
     advanceActivity(activityId, true)
   },
 
@@ -1315,6 +1311,7 @@ export const useGameStore = create<GameState>((set, get) => {
       },
       activityLog: [...state.activityLog, logEntry],
     })
+    advanceDay()
 
     // Maybe the tabloids catch wind of it — only for activities that were
     // actually newsworthy (see coverageChance), never guaranteed.
@@ -1344,7 +1341,6 @@ export const useGameStore = create<GameState>((set, get) => {
     const config = state.settings.aiEnabled ? getProviderConfig(state.settings.activeProviderId) : undefined
     const aiOk = !!config && canSpend(config.id, config.rpdBudget)
     recordEventTriggered()
-    advanceDay()
 
     if (!aiOk) {
       set({

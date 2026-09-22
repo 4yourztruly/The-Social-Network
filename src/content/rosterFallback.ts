@@ -2,7 +2,7 @@ import type { CareerPack, NPCSeed } from './careers/types'
 import type { OnboardingInput } from './seed'
 import { pick, randomInt, type RNG } from '../engine/rng'
 import { makeId } from '../engine/id'
-import { dicebearAvatarUrl } from '../engine/avatarSource'
+import { crestAvatarUrl, dicebearAvatarUrl, pickNpcAvatarUrl } from '../engine/avatarSource'
 
 // Deterministic, non-AI roster — used when the player hasn't configured an
 // AI provider, or when AI roster generation fails/times out (see
@@ -44,7 +44,7 @@ function randomHandle(first: string, last: string, rng: RNG): string {
   return slug(pick(rng, patterns))
 }
 
-function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle' | 'avatar'>, rng: RNG): NPCSeed {
+function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle'>, rng: RNG): NPCSeed {
   return {
     id: makeId('npc'),
     postingStyle: {
@@ -52,9 +52,6 @@ function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle' | 'avatar'>, rng:
       caps: Math.round(rng() * 10) / 10,
       hashtags: Math.round(rng() * 10) / 10,
     },
-    // Illustrated, never a real photo — nobody in this pool is a real
-    // person (see the file header comment).
-    avatar: { kind: 'webp', value: dicebearAvatarUrl(partial.username) },
     ...partial,
   }
 }
@@ -63,13 +60,51 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
   const orgForFlavor = input.org || pack.worldName
   const npcs: NPCSeed[] = []
 
-  for (let i = 0; i < 2; i++) {
-    const template = pick(rng, NEWS_TEMPLATES)
-    const name = template.replace('{org}', orgForFlavor)
+  // Celebs first — nobody in the fallback pool is real, so these stay
+  // illustrated portraits (there's no photo to fetch), but building them
+  // first means fan-account NPCs below can plausibly use one as "who
+  // they're a fan of".
+  const celebPersonas: NPCSeed['persona'][] = ['teammate', 'coach', 'agent', 'rival']
+  const celebAvatarUrls: string[] = []
+  for (let i = 0; i < 8; i++) {
+    const persona = celebPersonas[i % celebPersonas.length]
+    const { first, last } = randomName(rng)
+    const displayName = `${first} ${last}`
+    const username = randomHandle(first, last, rng)
+    const avatarUrl = dicebearAvatarUrl(username)
+    celebAvatarUrls.push(avatarUrl)
+    const bioByPersona: Record<string, string> = {
+      teammate: `${input.role || pack.roleOptions[0]} @ ${orgForFlavor}.`,
+      coach: `Manager, ${orgForFlavor}. Results business.`,
+      agent: 'Deals, not drama. (mostly)',
+      rival: `${input.role || pack.roleOptions[0]}, elsewhere. Not sorry.`,
+    }
     npcs.push(
       makeSeed(
         {
-          username: slug(name, String(i)),
+          username,
+          displayName,
+          bio: bioByPersona[persona],
+          persona,
+          personality: persona === 'rival' ? ['cocky', 'sarcastic'] : ['confident', 'driven'],
+          verified: true,
+          followers: randomInt(rng, 150_000, 4_000_000),
+          following: randomInt(rng, 50, 900),
+          avatar: { kind: 'webp', value: avatarUrl },
+        },
+        rng,
+      ),
+    )
+  }
+
+  for (let i = 0; i < 2; i++) {
+    const template = pick(rng, NEWS_TEMPLATES)
+    const name = template.replace('{org}', orgForFlavor)
+    const username = slug(name, String(i))
+    npcs.push(
+      makeSeed(
+        {
+          username,
           displayName: name,
           bio: `Covering ${orgForFlavor} and the wider ${pack.label.toLowerCase()} world.`,
           persona: 'match_reporter',
@@ -77,6 +112,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
           verified: true,
           followers: randomInt(rng, 80_000, 900_000),
           following: randomInt(rng, 200, 900),
+          avatar: { kind: 'webp', value: crestAvatarUrl(username) },
         },
         rng,
       ),
@@ -85,10 +121,11 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
 
   for (let i = 0; i < 2; i++) {
     const name = TABLOID_TEMPLATES[i % TABLOID_TEMPLATES.length]
+    const username = slug(name, String(i))
     npcs.push(
       makeSeed(
         {
-          username: slug(name, String(i)),
+          username,
           displayName: name,
           bio: 'Rumours, gossip, and whatever nobody wanted printed.',
           persona: 'tabloid',
@@ -96,6 +133,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
           verified: true,
           followers: randomInt(rng, 100_000, 1_500_000),
           following: randomInt(rng, 10, 60),
+          avatar: { kind: 'webp', value: crestAvatarUrl(username) },
         },
         rng,
       ),
@@ -107,10 +145,11 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
     const persona = commenterPersonas[i % commenterPersonas.length]
     if (persona === 'meme_account') {
       const name = pick(rng, MEME_NAMES)
+      const username = slug(name, String(i))
       npcs.push(
         makeSeed(
           {
-            username: slug(name, String(i)),
+            username,
             displayName: name,
             bio: "Not affiliated with anyone. Please don't sue.",
             persona,
@@ -118,6 +157,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
             verified: rng() < 0.4,
             followers: randomInt(rng, 5_000, 400_000),
             following: randomInt(rng, 1, 40),
+            avatar: { kind: 'webp', value: crestAvatarUrl(username) },
           },
           rng,
         ),
@@ -126,12 +166,16 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
     }
     // Ordinary people, not role-labeled accounts — the fan/hater flavor
     // lives in the bio and personality, never in the display name or handle.
+    // Their picture is whatever a real account might actually use: a
+    // team-crest-like mark, a random non-portrait photo, or (sometimes,
+    // for a fan account) a picture of a celeb elsewhere in this roster.
     const { first, last } = randomName(rng)
     const isHater = persona === 'hater'
+    const username = randomHandle(first, last, rng)
     npcs.push(
       makeSeed(
         {
-          username: randomHandle(first, last, rng),
+          username,
           displayName: `${first} ${last}`,
           bio: isHater ? 'Someone has to say it.' : `Supporting ${orgForFlavor} through everything.`,
           persona,
@@ -139,34 +183,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
           verified: false,
           followers: randomInt(rng, 200, 20_000),
           following: randomInt(rng, 100, 2_000),
-        },
-        rng,
-      ),
-    )
-  }
-
-  const celebPersonas: NPCSeed['persona'][] = ['teammate', 'coach', 'agent', 'rival']
-  for (let i = 0; i < 8; i++) {
-    const persona = celebPersonas[i % celebPersonas.length]
-    const { first, last } = randomName(rng)
-    const displayName = `${first} ${last}`
-    const bioByPersona: Record<string, string> = {
-      teammate: `${input.role || pack.roleOptions[0]} @ ${orgForFlavor}.`,
-      coach: `Manager, ${orgForFlavor}. Results business.`,
-      agent: 'Deals, not drama. (mostly)',
-      rival: `${input.role || pack.roleOptions[0]}, elsewhere. Not sorry.`,
-    }
-    npcs.push(
-      makeSeed(
-        {
-          username: randomHandle(first, last, rng),
-          displayName,
-          bio: bioByPersona[persona],
-          persona,
-          personality: persona === 'rival' ? ['cocky', 'sarcastic'] : ['confident', 'driven'],
-          verified: true,
-          followers: randomInt(rng, 150_000, 4_000_000),
-          following: randomInt(rng, 50, 900),
+          avatar: pickNpcAvatarUrl(username, rng, isHater ? [] : celebAvatarUrls),
         },
         rng,
       ),

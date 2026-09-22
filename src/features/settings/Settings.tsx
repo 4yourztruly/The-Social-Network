@@ -6,7 +6,8 @@ import { Avatar } from '../../components/Avatar'
 import { fileToAvatarDataUrl } from '../../components/imageUpload'
 import { AIProviderSetup } from '../../components/AIProviderSetup'
 import { getProviderConfig } from '../../ai/keyStorage'
-import { usageToday } from '../../ai/budget'
+import { usageToday, canSpend } from '../../ai/budget'
+import { generatePersonDetails } from '../../ai/personService'
 import { isNPC, type Avatar as AvatarType } from '../../types'
 
 interface SettingsProps {
@@ -33,10 +34,14 @@ export function Settings({ onBack }: SettingsProps) {
   )
   const [personName, setPersonName] = useState('')
   const [personUsername, setPersonUsername] = useState('')
+  const [personDescription, setPersonDescription] = useState('')
   const [personBio, setPersonBio] = useState('')
   const [personFollowers, setPersonFollowers] = useState('')
   const [personAvatar, setPersonAvatar] = useState<AvatarType | undefined>(undefined)
+  const [personPersonality, setPersonPersonality] = useState<string[]>([])
+  const [personVerified, setPersonVerified] = useState(false)
   const [personMessage, setPersonMessage] = useState<string | null>(null)
+  const [enrichingPerson, setEnrichingPerson] = useState(false)
   const personAvatarInputRef = useRef<HTMLInputElement>(null)
 
   const handlePersonAvatarFile = async (file: File | undefined) => {
@@ -60,12 +65,17 @@ export function Settings({ onBack }: SettingsProps) {
       bio: personBio.trim(),
       followers: Number(personFollowers.replace(/[^0-9]/g, '')) || undefined,
       avatar: personAvatar,
+      personality: personPersonality,
+      verified: personVerified,
     })
     setPersonName('')
     setPersonUsername('')
+    setPersonDescription('')
     setPersonBio('')
     setPersonFollowers('')
     setPersonAvatar(undefined)
+    setPersonPersonality([])
+    setPersonVerified(false)
     if (personAvatarInputRef.current) personAvatarInputRef.current.value = ''
     setPersonMessage(`Added ${personName.trim()} to your network.`)
   }
@@ -77,9 +87,41 @@ export function Settings({ onBack }: SettingsProps) {
   // this field still unset even though the actual key is sitting right there.
   const DEFAULT_PRESET_ID = 'groq'
 
-  const activeConfig = getProviderConfig(settings.activeProviderId)
+  const activeConfig = getProviderConfig(settings.activeProviderId ?? DEFAULT_PRESET_ID)
   const usedToday = activeConfig ? usageToday(activeConfig.id) : 0
   const aiStatus = !settings.aiEnabled ? 'off' : !activeConfig ? 'not configured' : 'on'
+
+  const handleFillWithAI = async () => {
+    if (!personName.trim()) {
+      setPersonMessage('Give them a name first.')
+      return
+    }
+    if (!activeConfig || !canSpend(activeConfig.id, activeConfig.rpdBudget)) {
+      setPersonMessage('Connect an AI provider above first (or you\'re out of calls for today).')
+      return
+    }
+    setEnrichingPerson(true)
+    setPersonMessage(null)
+    try {
+      const result = await generatePersonDetails({
+        name: personName.trim(),
+        description: personDescription.trim(),
+        config: activeConfig,
+      })
+      if (!result) {
+        setPersonMessage("Couldn't fill that in — try again, or fill it in yourself.")
+        return
+      }
+      setPersonBio(result.bio)
+      setPersonPersonality(result.personality)
+      setPersonVerified(result.verified)
+      setPersonFollowers(String(result.followers))
+      if (result.avatarUrl) setPersonAvatar({ kind: 'webp', value: result.avatarUrl })
+      setPersonMessage('Filled in from AI — review and adjust before adding.')
+    } finally {
+      setEnrichingPerson(false)
+    }
+  }
 
   const handleExport = () => {
     downloadSaveFile(toSaveGame())
@@ -245,6 +287,26 @@ export function Settings({ onBack }: SettingsProps) {
           </div>
 
           <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium text-neutral-600 dark:text-neutral-400">Description (optional)</span>
+            <textarea
+              value={personDescription}
+              onChange={(e) => setPersonDescription(e.target.value)}
+              placeholder="Any hint for the AI — e.g. French footballer, PSG striker, or just leave blank and let it research the name"
+              rows={2}
+              className="resize-none rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={handleFillWithAI}
+            disabled={enrichingPerson}
+            className="cursor-pointer justify-self-start rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-neutral-700"
+          >
+            {enrichingPerson ? 'Filling in…' : 'Fill with AI'}
+          </button>
+
+          <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-400">Bio</span>
             <input
               value={personBio}
@@ -253,6 +315,19 @@ export function Settings({ onBack }: SettingsProps) {
               className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
             />
           </label>
+
+          {personPersonality.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {personPersonality.map((trait) => (
+                <span
+                  key={trait}
+                  className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
+                >
+                  {trait}
+                </span>
+              ))}
+            </div>
+          )}
 
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-400">Followers</span>
