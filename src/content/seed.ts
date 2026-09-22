@@ -4,10 +4,16 @@ import { fillTemplate } from '../engine/templates/filler'
 import { mulberry32, pick, randomInt, type RNG } from '../engine/rng'
 import { makeId } from '../engine/id'
 import { isViewableProfile } from '../engine/npcTier'
-import { pushRecentLine, selectLine } from '../engine/templates/select'
+import { pushRecentLine, selectLine, selectPlainLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
 import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
 import { GENERIC_OFFTOPIC_POSTS, GENERIC_OFFTOPIC_REACTION_POOL } from './genericFiller'
+import { estimateEngagement } from '../engine/formulas'
+
+// Stand-in "social score" (see engine/formulas.estimateEngagement — normally
+// the player's humor+aura) used to size NPC-authored engagement numbers.
+// Middle-of-the-road on purpose: NPCs aren't playing the stat game.
+const NPC_SOCIAL_SCORE = 45
 
 // An offTopic NPC (a real celeb the AI picked for variety, unrelated to
 // this career's world) never draws from this pack's sport/industry-flavored
@@ -147,9 +153,14 @@ function seedPosts(
     const author = pick(rng, npcList)
     const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
-    const line = pick(rng, lines)
-    const text = fillTemplate(line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
+    // Anti-repetition, same as replies/live comments — without this the
+    // same handful of authors (small line pools) visibly repeated
+    // themselves across the ~45-post opening feed.
+    const selection = selectPlainLine(rng, lines, author.recentLineIds)
+    author.recentLineIds = pushRecentLine(author.recentLineIds, selection.lineId)
+    const text = fillTemplate(selection.line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
     const ageMs = randomInt(rng, 5, 60 * 24) * 60 * 1000 // 5 min to 60 hours ago
+    const engagement = estimateEngagement(rng, author.followers, NPC_SOCIAL_SCORE, [])
     posts.push({
       id: makeId('post'),
       authorId: author.id,
@@ -157,8 +168,8 @@ function seedPosts(
       text,
       tags: [],
       createdAt: now - ageMs,
-      likes: randomInt(rng, 0, Math.round(author.followers / 4000)),
-      reposts: randomInt(rng, 0, Math.round(author.followers / 12000)),
+      likes: engagement.likes,
+      reposts: engagement.reposts,
       replies: randomInt(rng, 0, 20),
       origin: 'template',
     })
@@ -183,9 +194,11 @@ export function seedDailyPosts(
     const author = pick(rng, npcList)
     const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
-    const line = pick(rng, lines)
-    const text = fillTemplate(line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
+    const selection = selectPlainLine(rng, lines, author.recentLineIds)
+    author.recentLineIds = pushRecentLine(author.recentLineIds, selection.lineId)
+    const text = fillTemplate(selection.line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
     const ageMs = randomInt(rng, 1, 180) * 60 * 1000 // 1 min to 3h ago
+    const engagement = estimateEngagement(rng, author.followers, NPC_SOCIAL_SCORE, [])
     posts.push({
       id: makeId('post'),
       authorId: author.id,
@@ -193,8 +206,8 @@ export function seedDailyPosts(
       text,
       tags: [],
       createdAt: now - ageMs,
-      likes: randomInt(rng, 0, Math.round(author.followers / 4000)),
-      reposts: randomInt(rng, 0, Math.round(author.followers / 12000)),
+      likes: engagement.likes,
+      reposts: engagement.reposts,
       replies: randomInt(rng, 0, 15),
       origin: 'template',
     })
@@ -295,7 +308,10 @@ export function seedReplies(
         text,
         tags: [],
         createdAt,
-        likes: randomInt(rng, 0, 30),
+        // A reply's own likes are a small fraction of what the same person's
+        // top-level posts would draw — replies don't get anywhere near a
+        // post's visibility.
+        likes: estimateEngagement(rng, Math.round(commenter.followers / 20), NPC_SOCIAL_SCORE, []).likes,
         reposts: 0,
         replies: 0,
         origin: 'template',

@@ -19,10 +19,14 @@ export function crestAvatarUrl(seed: string): string {
   return `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(seed)}`
 }
 
-// A deterministic, seeded stock photo (could be a car, a landscape, an
-// object, anything) — never a posed portrait of a person.
-export function nonPortraitPhotoUrl(seed: string): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(seed)}/300/300`
+// A simple icon-on-a-background mark — reads like "a picture of a thing"
+// (an object, a symbol) rather than a face. Deliberately NOT a random stock
+// photo service: those can return anything (closeups, unrelated/odd
+// subjects) with no quality control, which was landing as "avatars that
+// don't fit". Everything here is a deterministic SVG, so quality is
+// consistent by construction.
+export function iconAvatarUrl(seed: string): string {
+  return `https://api.dicebear.com/9.x/icons/svg?seed=${encodeURIComponent(seed)}`
 }
 
 // Picks which kind of picture an ordinary (invented) NPC would plausibly
@@ -38,7 +42,7 @@ export function pickNpcAvatarUrl(seed: string, rng: () => number, celebAvatarPoo
   }
   const remaining = canBeFanOf ? (roll - 0.2) / 0.8 : roll
   if (remaining < 0.4) return { kind: 'webp', value: crestAvatarUrl(seed) }
-  if (remaining < 0.75) return { kind: 'webp', value: nonPortraitPhotoUrl(seed) }
+  if (remaining < 0.75) return { kind: 'webp', value: iconAvatarUrl(seed) }
   return { kind: 'webp', value: dicebearAvatarUrl(seed) }
 }
 

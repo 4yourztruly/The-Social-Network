@@ -4,7 +4,7 @@ import type { CareerPack, NPCSeed } from '../content/careers/types'
 import type { OnboardingInput } from '../content/seed'
 import { createOpenAICompatibleProvider, AIRequestError } from './openaiCompatible'
 import { npcSeedSchema } from '../content/schemas'
-import { makeId } from '../engine/id'
+import { dedupe, makeId } from '../engine/id'
 import { crestAvatarUrl, fetchWikipediaThumbnail, pickNpcAvatarUrl } from '../engine/avatarSource'
 
 const REQUEST_TIMEOUT_MS = 25_000
@@ -109,10 +109,14 @@ export async function generateRoster(args: GenerateRosterArgs): Promise<NPCSeed[
       signal: controller.signal,
     })
     const parsed = rosterResponseSchema.parse(extractJsonArray(text))
+    // Usernames (and therefore most avatar seeds) must be unique across the
+    // whole roster — the model occasionally repeats a handle across two
+    // entries, especially generic ones close to the prompt's own examples.
+    const usedUsernames = new Set<string>()
     const cleaned = parsed.map((entry) => ({
       ...entry,
       id: makeId('npc'),
-      username: entry.username.replace(/^@/, '').replace(/\s+/g, '').slice(0, 24),
+      username: dedupe(entry.username.replace(/^@/, '').replace(/\s+/g, '').slice(0, 24), usedUsernames),
       followers: clampFollowers(entry.persona, entry.followers),
       following: Math.max(0, Math.round(entry.following)),
     }))
@@ -132,8 +136,8 @@ export async function generateRoster(args: GenerateRosterArgs): Promise<NPCSeed[
         return { ...entry, avatar: wikiPhotos[i] ? { kind: 'webp' as const, value: wikiPhotos[i]! } : pickNpcAvatarUrl(entry.username, Math.random) }
       }
       // Media outlets get a logo-like mark, not a face. Ordinary NPCs get
-      // whatever a real account might actually use — a crest, a random
-      // non-portrait photo, or (sometimes) a picture of a celeb elsewhere
+      // whatever a real account might actually use — a crest-like mark, an
+      // icon-style picture, or (sometimes) a picture of a celeb elsewhere
       // in this same roster, for a "fan account" feel.
       if (isMediaPersona(entry.persona)) {
         return { ...entry, avatar: { kind: 'webp' as const, value: crestAvatarUrl(entry.username) } }

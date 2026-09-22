@@ -1,7 +1,7 @@
 import type { CareerPack, NPCSeed } from './careers/types'
 import type { OnboardingInput } from './seed'
 import { pick, randomInt, type RNG } from '../engine/rng'
-import { makeId } from '../engine/id'
+import { dedupe, makeId } from '../engine/id'
 import { crestAvatarUrl, dicebearAvatarUrl, pickNpcAvatarUrl } from '../engine/avatarSource'
 
 // Deterministic, non-AI roster — used when the player hasn't configured an
@@ -59,6 +59,11 @@ function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle'>, rng: RNG): NPCS
 export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rng: RNG): NPCSeed[] {
   const orgForFlavor = input.org || pack.worldName
   const npcs: NPCSeed[] = []
+  // Usernames (and therefore most avatar URLs, which are seeded by
+  // username) must be unique across the WHOLE roster, not just within one
+  // persona group — a celeb and a commenter can otherwise land on the same
+  // handle by chance, producing identical pictures.
+  const usedUsernames = new Set<string>()
 
   // Celebs first — nobody in the fallback pool is real, so these stay
   // illustrated portraits (there's no photo to fetch), but building them
@@ -70,7 +75,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
     const persona = celebPersonas[i % celebPersonas.length]
     const { first, last } = randomName(rng)
     const displayName = `${first} ${last}`
-    const username = randomHandle(first, last, rng)
+    const username = dedupe(randomHandle(first, last, rng), usedUsernames)
     const avatarUrl = dicebearAvatarUrl(username)
     celebAvatarUrls.push(avatarUrl)
     const bioByPersona: Record<string, string> = {
@@ -100,7 +105,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
   for (let i = 0; i < 2; i++) {
     const template = pick(rng, NEWS_TEMPLATES)
     const name = template.replace('{org}', orgForFlavor)
-    const username = slug(name, String(i))
+    const username = dedupe(slug(name, String(i)), usedUsernames)
     npcs.push(
       makeSeed(
         {
@@ -121,7 +126,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
 
   for (let i = 0; i < 2; i++) {
     const name = TABLOID_TEMPLATES[i % TABLOID_TEMPLATES.length]
-    const username = slug(name, String(i))
+    const username = dedupe(slug(name, String(i)), usedUsernames)
     npcs.push(
       makeSeed(
         {
@@ -145,7 +150,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
     const persona = commenterPersonas[i % commenterPersonas.length]
     if (persona === 'meme_account') {
       const name = pick(rng, MEME_NAMES)
-      const username = slug(name, String(i))
+      const username = dedupe(slug(name, String(i)), usedUsernames)
       npcs.push(
         makeSeed(
           {
@@ -171,7 +176,7 @@ export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rn
     // for a fan account) a picture of a celeb elsewhere in this roster.
     const { first, last } = randomName(rng)
     const isHater = persona === 'hater'
-    const username = randomHandle(first, last, rng)
+    const username = dedupe(randomHandle(first, last, rng), usedUsernames)
     npcs.push(
       makeSeed(
         {
