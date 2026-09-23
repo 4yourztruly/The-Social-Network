@@ -37,6 +37,14 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webp,ico}'],
+        // Explicit rather than relying on registerType:'autoUpdate' to
+        // imply these — a new SW should take control immediately rather
+        // than waiting for every tab to close first, and stale precache
+        // entries from old builds should never linger once a new one has
+        // activated.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
     }),
   ],
