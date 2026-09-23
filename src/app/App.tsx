@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTheme } from './useTheme'
 import { usePersistence } from './usePersistence'
 import { useSchedulerTick } from './useSchedulerTick'
@@ -183,23 +183,9 @@ export default function App() {
 
   return (
     <>
-      {/* TEMPORARY diagnostic marker — green pinned to literal bottom:0 (the
-          old, confirmed-wrong reference point), red pinned to the corrected
-          position the shell below now actually uses. If red sits at the
-          true physical edge and green sits ~1cm above it, that confirms the
-          fix; remove both once confirmed. */}
-      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, height: 8, background: 'lime', zIndex: 99999 }} />
-      <div
-        style={{
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))',
-          height: 8,
-          background: 'red',
-          zIndex: 99999,
-        }}
-      />
+      {/* TEMPORARY diagnostic overlay — real numbers instead of guessing
+          from colored bars. Remove once we know what's actually happening. */}
+      <DiagnosticOverlay />
       <div
         className="fixed inset-x-0 top-0 mx-auto flex max-w-xl overflow-hidden md:max-w-4xl"
         style={{ bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }}
@@ -287,6 +273,83 @@ export default function App() {
           <BottomNav screen={screen} onNavigate={handleNavigate} />
         </div>
       </div>
+      </div>
+    </>
+  )
+}
+
+// TEMPORARY — prints real measurements on screen instead of guessing from
+// colored bars. A probe element pinned to literal `bottom: 0` gives the
+// actual pixel gap between that and the true screen bottom directly,
+// without relying on env()/visualViewport being trustworthy on their own.
+function DiagnosticOverlay() {
+  const [info, setInfo] = useState<string[]>(['measuring…'])
+  const probeRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const measure = () => {
+      const probeRect = probeRef.current?.getBoundingClientRect()
+      const style = probeRef.current ? getComputedStyle(probeRef.current) : null
+      const gapBelowProbe = probeRect ? window.innerHeight - probeRect.bottom : NaN
+      setInfo([
+        `innerHeight: ${window.innerHeight}`,
+        `visualViewport.height: ${window.visualViewport?.height ?? 'n/a'}`,
+        `visualViewport.offsetTop: ${window.visualViewport?.offsetTop ?? 'n/a'}`,
+        `screen.height: ${window.screen?.height ?? 'n/a'} dpr:${window.devicePixelRatio}`,
+        `documentElement.clientHeight: ${document.documentElement.clientHeight}`,
+        `env(safe-area-inset-bottom) computed: ${style?.paddingBottom ?? 'n/a'}`,
+        `env(safe-area-inset-top) computed: ${style?.paddingTop ?? 'n/a'}`,
+        `probe bottom:0 rect.bottom: ${probeRect?.bottom ?? 'n/a'}`,
+        `gap below probe (should be 0): ${gapBelowProbe}`,
+        `display-mode standalone: ${window.matchMedia('(display-mode: standalone)').matches}`,
+      ])
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
+    }
+  }, [])
+
+  return (
+    <>
+      {/* Invisible probe — exists only so we can measure where a plain
+          fixed bottom:0 element actually lands, and read the computed
+          env() padding values off a real element (env() only resolves
+          inside an actual style computation, not JS directly). */}
+      <div
+        ref={probeRef}
+        style={{
+          position: 'fixed',
+          left: 0,
+          bottom: 0,
+          width: 1,
+          height: 1,
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingTop: 'env(safe-area-inset-top)',
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 999999,
+          background: 'black',
+          color: 'lime',
+          fontSize: 11,
+          fontFamily: 'monospace',
+          padding: '4px 6px',
+          lineHeight: 1.5,
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {info.join('\n')}
       </div>
     </>
   )
