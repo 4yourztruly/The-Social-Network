@@ -163,7 +163,7 @@ const activitySchema = z.object({
   id: z.string(),
   description: z.string(),
   participantIds: z.array(z.string()),
-  status: z.enum(['scheduled', 'active', 'ended']),
+  status: z.enum(['scheduled', 'active', 'ended', 'cancelled']),
   startAt: z.number(),
   plannedLabel: z.string().optional(),
   createdAt: z.number(),

@@ -1327,6 +1327,18 @@ export const useGameStore = create<GameState>((set, get) => {
       const npc = state.profiles[npcId]
       if (npc && isNPC(npc)) rsvps[npcId] = computeRsvp(npc, rng)
     }
+    // A solo-invite activity ("go on a date with X") where the one person
+    // invited declines never actually happened — cancel it outright rather
+    // than running a scene with nobody there, and never touch advanceDay
+    // (see endActivity/submitPlayerPost/finishEncounter — only those charge
+    // a day) so the player can freely start a different activity right away.
+    const soloDeclined = activity.participantIds.length === 1 && rsvps[activity.participantIds[0]] === 'declined'
+    if (soloDeclined) {
+      set((s) => ({
+        activities: { ...s.activities, [activityId]: { ...activity, status: 'cancelled', rsvps } },
+      }))
+      return
+    }
     set((s) => ({
       activities: { ...s.activities, [activityId]: { ...activity, status: 'active', rsvps } },
     }))

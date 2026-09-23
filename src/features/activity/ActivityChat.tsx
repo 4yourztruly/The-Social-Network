@@ -45,6 +45,37 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
     onBack()
   }
 
+  // A solo-invite activity where the one person declines never happened —
+  // see store.startActivity. No day was charged for it, so this is just a
+  // dead end to clear out of the way, not an outcome to review.
+  if (activity.status === 'cancelled') {
+    const invitee = participants[0]
+    return (
+      <div className="flex h-full flex-col">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
+          <button onClick={onBack} className="rounded-full p-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+            <ArrowLeftIcon className="h-5 w-5" />
+          </button>
+          <p className="truncate text-[15px] font-semibold">{activity.description}</p>
+        </div>
+
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+          {invitee && <Avatar avatar={invitee.avatar} seed={invitee.id} size={48} />}
+          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+            {invitee ? `${invitee.displayName} couldn't make it` : "They couldn't make it"}
+          </p>
+          <p className="text-sm text-neutral-500">Nothing happened, no day used — plan something else.</p>
+          <button
+            onClick={handleDelete}
+            className="mt-2 cursor-pointer rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Right after Start, who actually showed up — see engine/activity.ts
   // computeRsvp and store.startActivity. Only shown once per visit to this
   // screen; "Continue" moves into the scene itself.

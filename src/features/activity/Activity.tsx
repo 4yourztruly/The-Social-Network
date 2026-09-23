@@ -73,6 +73,7 @@ export function ActivityScreen({ onOpenProfile }: ActivityProps) {
                   {activity.status === 'scheduled' && `Not started yet${activity.plannedLabel ? ` · planned: ${activity.plannedLabel}` : ''}`}
                   {activity.status === 'active' && 'In progress'}
                   {activity.status === 'ended' && (activity.outcomeSummary ?? 'Ended')}
+                  {activity.status === 'cancelled' && "Couldn't make it — cancelled"}
                 </p>
               </div>
               <span

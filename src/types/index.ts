@@ -252,7 +252,7 @@ export interface WorldSettings {
 // "Event scenes" / 17.5 "Scheduled activities", built as a free-text setup
 // instead of fixed templates). Not to be confused with ActivityLogEntry
 // (the read-only history of past actions) above.
-export type ActivityStatus = 'scheduled' | 'active' | 'ended'
+export type ActivityStatus = 'scheduled' | 'active' | 'ended' | 'cancelled'
 
 export interface ActivityMessage {
   id: string

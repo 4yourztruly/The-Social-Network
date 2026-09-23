@@ -7,15 +7,22 @@ interface BottomNavProps {
   onNavigate: (screen: Screen) => void
 }
 
-// Fixed to the true bottom of the physical viewport — not a flex child of
-// the app shell — so it can never be dragged out of position by the
-// shell's own height glitching (iOS standalone WKWebView's svh/dvh bugs,
-// the keyboard opening, etc. — see useViewportHeight.ts). A same-sized
-// spacer below reserves the space in normal flow so scrolling content
-// never renders underneath it.
-function NavBar({ screen, onNavigate }: BottomNavProps) {
+// Deliberately a plain in-flow flex child of the app shell (NOT
+// position:fixed) — iOS WKWebView has a well-known bug where a fixed
+// element can visually detach and freeze in place after a nested
+// overflow-y-auto pane (Compose, PostThread, Profile, ...) is scrolled and
+// then navigated away from mid-scroll. The shell itself never scrolls
+// (html/body/#root are overflow:hidden — see index.css), so as long as the
+// shell's own height stays put (see useViewportHeight.ts, which no longer
+// re-measures on the keyboard opening/closing), this being the shell's
+// last flex child is sufficient to keep it pinned to the true bottom edge
+// without any of position:fixed's scroll-interaction bugs.
+export function BottomNav({ screen, onNavigate }: BottomNavProps) {
   return (
-    <nav className="flex border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+    <nav
+      className="flex shrink-0 border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       {NAV_ITEMS.map(({ screen: s, label, Icon }) => (
         <button
           key={s}
@@ -37,21 +44,5 @@ function NavBar({ screen, onNavigate }: BottomNavProps) {
         </button>
       ))}
     </nav>
-  )
-}
-
-export function BottomNav({ screen, onNavigate }: BottomNavProps) {
-  return (
-    <>
-      <div aria-hidden className="invisible shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <NavBar screen={screen} onNavigate={onNavigate} />
-      </div>
-      <div
-        className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-xl md:max-w-4xl"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <NavBar screen={screen} onNavigate={onNavigate} />
-      </div>
-    </>
   )
 }
