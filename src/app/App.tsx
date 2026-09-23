@@ -174,8 +174,13 @@ export default function App() {
   }
 
   return (
-    <div className="fixed inset-0 mx-auto flex max-w-xl overflow-hidden md:max-w-4xl">
-      <SidebarNav screen={screen} onNavigate={handleNavigate} />
+    <>
+      {/* TEMPORARY diagnostic markers — not a fix, just to see exactly
+          where things actually land on a real device. Remove once we know. */}
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, height: 12, background: 'red', zIndex: 99999 }} />
+      <div style={{ position: 'fixed', left: 0, right: 0, top: 0, height: 12, background: 'blue', zIndex: 99999 }} />
+      <div className="fixed inset-0 mx-auto flex max-w-xl overflow-hidden border-4 border-lime-400 md:max-w-4xl">
+        <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
       <div
         className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
@@ -258,6 +263,7 @@ export default function App() {
           <BottomNav screen={screen} onNavigate={handleNavigate} />
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
