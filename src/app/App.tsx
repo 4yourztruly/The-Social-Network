@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTheme } from './useTheme'
 import { usePersistence } from './usePersistence'
 import { useSchedulerTick } from './useSchedulerTick'
@@ -68,7 +68,7 @@ export default function App() {
   if (!onboarded) {
     return (
       <div
-        className="fixed inset-0 mx-auto flex max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+        className="mx-auto flex h-dvh max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
         style={{
           paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
@@ -94,8 +94,7 @@ export default function App() {
   // keyboard mid-dismiss with nothing left to blur, which can visibly glitch
   // its close animation. Blurring explicitly, before the screen swap, gives
   // it a normal close to finish against instead of vanishing out from
-  // under it. (The bottom nav itself no longer depends on any of this —
-  // see the shell's `fixed inset-0` below.)
+  // under it.
   const blurActiveElement = () => {
     const active = document.activeElement
     if (active instanceof HTMLElement) active.blur()
@@ -174,12 +173,8 @@ export default function App() {
   }
 
   return (
-    <>
-      {/* TEMPORARY diagnostic overlay — real numbers instead of guessing
-          from colored bars. Remove once we know what's actually happening. */}
-      <DiagnosticOverlay />
-      <div className="fixed inset-0 mx-auto flex max-w-xl overflow-hidden md:max-w-4xl">
-        <SidebarNav screen={screen} onNavigate={handleNavigate} />
+    <div className="mx-auto flex h-dvh max-w-xl overflow-hidden md:max-w-4xl">
+      <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
       <div
         className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
@@ -262,90 +257,7 @@ export default function App() {
           <BottomNav screen={screen} onNavigate={handleNavigate} />
         </div>
       </div>
-      </div>
-    </>
+    </div>
   )
 }
 
-// TEMPORARY — prints real measurements on screen instead of guessing from
-// colored bars. A probe element pinned to literal `bottom: 0` gives the
-// actual pixel gap between that and the true screen bottom directly,
-// without relying on env()/visualViewport being trustworthy on their own.
-function DiagnosticOverlay() {
-  const [info, setInfo] = useState<string[]>(['measuring…'])
-  const probeRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const measure = () => {
-      const probeRect = probeRef.current?.getBoundingClientRect()
-      const style = probeRef.current ? getComputedStyle(probeRef.current) : null
-      const gapBelowProbe = probeRect ? window.innerHeight - probeRect.bottom : NaN
-      const navEl = document.querySelectorAll('nav')[document.querySelectorAll('nav').length - 1]
-      const navRect = navEl?.getBoundingClientRect()
-      const gapBelowNav = navRect ? window.innerHeight - navRect.bottom : NaN
-      setInfo([
-        `BUILD: v5-html-and-body-position-fixed`,
-        `innerHeight: ${window.innerHeight}`,
-        `visualViewport.height: ${window.visualViewport?.height ?? 'n/a'}`,
-        `visualViewport.offsetTop: ${window.visualViewport?.offsetTop ?? 'n/a'}`,
-        `screen.height: ${window.screen?.height ?? 'n/a'} dpr:${window.devicePixelRatio}`,
-        `documentElement.clientHeight: ${document.documentElement.clientHeight}`,
-        `env(safe-area-inset-bottom) computed: ${style?.paddingBottom ?? 'n/a'}`,
-        `env(safe-area-inset-top) computed: ${style?.paddingTop ?? 'n/a'}`,
-        `probe bottom:0 rect.bottom: ${probeRect?.bottom ?? 'n/a'}`,
-        `gap below probe (should be 0): ${gapBelowProbe}`,
-        `REAL NAV rect.bottom: ${navRect?.bottom ?? 'n/a'}`,
-        `gap below REAL NAV (should be 0): ${gapBelowNav}`,
-        `display-mode standalone: ${window.matchMedia('(display-mode: standalone)').matches}`,
-      ])
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    window.visualViewport?.addEventListener('resize', measure)
-    return () => {
-      window.removeEventListener('resize', measure)
-      window.visualViewport?.removeEventListener('resize', measure)
-    }
-  }, [])
-
-  return (
-    <>
-      {/* Invisible probe — exists only so we can measure where a plain
-          fixed bottom:0 element actually lands, and read the computed
-          env() padding values off a real element (env() only resolves
-          inside an actual style computation, not JS directly). */}
-      <div
-        ref={probeRef}
-        style={{
-          position: 'fixed',
-          left: 0,
-          bottom: 0,
-          width: 1,
-          height: 1,
-          paddingBottom: 'env(safe-area-inset-bottom)',
-          paddingTop: 'env(safe-area-inset-top)',
-          opacity: 0,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 999999,
-          background: 'black',
-          color: 'lime',
-          fontSize: 11,
-          fontFamily: 'monospace',
-          padding: '4px 6px',
-          lineHeight: 1.5,
-          whiteSpace: 'pre-wrap',
-        }}
-      >
-        {info.join('\n')}
-      </div>
-    </>
-  )
-}

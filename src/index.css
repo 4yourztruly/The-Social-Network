@@ -17,23 +17,6 @@ body,
   overflow: hidden;
 }
 
-/* On-device diagnostics proved every JS-visible metric (innerHeight,
-   visualViewport, the real nav's own getBoundingClientRect()) already
-   accounts for the full screen with a verified zero gap — yet a gap was
-   still visibly rendered in the standalone Home Screen app. That
-   combination rules out CSS sizing: it means iOS's native UIScrollView
-   backing the page is reserving bounce/rubber-band space that JavaScript
-   has no visibility into, because `overflow: hidden` alone doesn't fully
-   convince iOS's native layer the page can never scroll. Pinning BOTH html
-   and body with `position: fixed` (the fuller, classic pre-`dvh`-era
-   technique for this exact class of bug — pinning body alone wasn't
-   enough) is a much stronger signal to that native layer. */
-html,
-body {
-  position: fixed;
-  inset: 0;
-}
-
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
