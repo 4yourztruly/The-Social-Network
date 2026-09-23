@@ -284,7 +284,7 @@ function DiagnosticOverlay() {
       const navRect = navEl?.getBoundingClientRect()
       const gapBelowNav = navRect ? window.innerHeight - navRect.bottom : NaN
       setInfo([
-        `BUILD: v4-body-position-fixed`,
+        `BUILD: v5-html-and-body-position-fixed`,
         `innerHeight: ${window.innerHeight}`,
         `visualViewport.height: ${window.visualViewport?.height ?? 'n/a'}`,
         `visualViewport.offsetTop: ${window.visualViewport?.offsetTop ?? 'n/a'}`,

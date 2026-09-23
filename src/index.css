@@ -14,15 +14,24 @@ html,
 body,
 #root {
   height: 100%;
-  /* The app's own root (App.tsx) is `position: fixed; inset: 0` — pinned
-     directly to the physical screen's edges, not sized off html/body/#root
-     at all, so it's immune to every iOS viewport-unit quirk (`vh`/`svh`/
-     `dvh` all misbehave in various ways with the on-screen keyboard and
-     standalone-PWA mode — three earlier attempts at chasing those, all
-     replaced by this). This overflow:hidden is just a defensive backstop
-     so html/body itself never becomes independently scrollable/draggable
-     underneath the fixed app. */
   overflow: hidden;
+}
+
+/* On-device diagnostics proved every JS-visible metric (innerHeight,
+   visualViewport, the real nav's own getBoundingClientRect()) already
+   accounts for the full screen with a verified zero gap — yet a gap was
+   still visibly rendered in the standalone Home Screen app. That
+   combination rules out CSS sizing: it means iOS's native UIScrollView
+   backing the page is reserving bounce/rubber-band space that JavaScript
+   has no visibility into, because `overflow: hidden` alone doesn't fully
+   convince iOS's native layer the page can never scroll. Pinning BOTH html
+   and body with `position: fixed` (the fuller, classic pre-`dvh`-era
+   technique for this exact class of bug — pinning body alone wasn't
+   enough) is a much stronger signal to that native layer. */
+html,
+body {
+  position: fixed;
+  inset: 0;
 }
 
 html {
@@ -31,19 +40,6 @@ html {
 }
 
 body {
-  /* On-device diagnostics proved every JS-visible metric (innerHeight,
-     visualViewport, the real nav's own getBoundingClientRect()) already
-     accounts for the full screen with zero gap — yet a gap was still
-     visibly rendered in the standalone Home Screen app. That combination
-     means the gap isn't a CSS-sizing bug at all: it's iOS's native
-     UIScrollView backing the page reserving bounce/rubber-band space that
-     JavaScript has no visibility into, because `overflow: hidden` alone
-     doesn't fully convince iOS's native layer the page can never scroll.
-     Pinning body itself with `position: fixed` (the classic pre-`dvh`-era
-     technique for this exact class of bug) is a stronger signal to that
-     native layer than overflow:hidden is on its own. */
-  position: fixed;
-  inset: 0;
   margin: 0;
   background-color: var(--color-white);
   overscroll-behavior: none;
