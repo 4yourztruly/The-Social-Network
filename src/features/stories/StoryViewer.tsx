@@ -55,13 +55,14 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
   const story = stories[storyIndex]
   const authorPos = authorIds.indexOf(authorId)
 
-  // Comments nest just like a post's — a reply to a comment is a genuine
-  // child of that comment. commentCount is the flat total (for the header
-  // badge); commentNodes is the depth-first tree used to render it.
-  const { commentNodes, commentCount } = useMemo(() => {
-    if (!story) return { commentNodes: [] as { id: string; depth: number }[], commentCount: 0 }
+  // A reply can target any comment (prefilling "@whoever-it-was" in the
+  // composer), but the panel always renders one flat, chronological list —
+  // not indented by who-replied-to-whom — so several people replying to the
+  // same comment (or to each other) reads top to bottom like the rest of
+  // the app's comments, not as a sideways-marching tree.
+  const { commentIds, commentCount } = useMemo(() => {
+    if (!story) return { commentIds: [] as string[], commentCount: 0 }
     const childrenByParent = new Map<string, string[]>()
-    let count = 0
     for (const id of postOrder) {
       const parentId = posts[id]?.parentId
       if (!parentId) continue
@@ -69,19 +70,16 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
       if (list) list.push(id)
       else childrenByParent.set(parentId, [id])
     }
-    for (const list of childrenByParent.values()) {
-      list.sort((a, b) => (posts[a]?.createdAt ?? 0) - (posts[b]?.createdAt ?? 0))
-    }
-    const result: { id: string; depth: number }[] = []
-    const visit = (parentId: string, depth: number) => {
+    const result: string[] = []
+    const visit = (parentId: string) => {
       for (const childId of childrenByParent.get(parentId) ?? []) {
-        result.push({ id: childId, depth })
-        count++
-        visit(childId, depth + 1)
+        result.push(childId)
+        visit(childId)
       }
     }
-    visit(story.id, 0)
-    return { commentNodes: result, commentCount: count }
+    visit(story.id)
+    result.sort((a, b) => (posts[a]?.createdAt ?? 0) - (posts[b]?.createdAt ?? 0))
+    return { commentIds: result, commentCount: result.length }
   }, [postOrder, posts, story])
 
   useEffect(() => {
@@ -278,23 +276,15 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
-                {commentNodes.length > 0 ? (
-                  commentNodes.map(({ id, depth }) => {
+                {commentIds.length > 0 ? (
+                  commentIds.map((id) => {
                     const comment = posts[id]
                     if (!comment) return null
                     const commenter = profiles[comment.authorId]
                     if (!commenter) return null
                     const commenterViewable = !isNPC(commenter) || isViewableProfile(commenter)
                     return (
-                      <div
-                        key={id}
-                        style={depth > 0 ? { marginLeft: Math.min(depth, 5) * 16 } : undefined}
-                        className={`flex items-start gap-2 rounded-xl py-2 ${
-                          depth > 0
-                            ? 'border-l-2 border-sky-200 bg-sky-50/40 pl-2 dark:border-sky-900/60 dark:bg-sky-500/[0.03]'
-                            : ''
-                        }`}
-                      >
+                      <div key={id} className="flex items-start gap-2 py-2">
                         <Avatar avatar={commenter.avatar} seed={commenter.id} size={28} />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm">

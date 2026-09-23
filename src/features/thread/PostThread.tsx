@@ -32,12 +32,12 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
   const [composerText, setComposerText] = useState('')
   const replyInputRef = useRef<HTMLInputElement>(null)
 
-  // Replies nest — a reply to a reply is a genuine child of that reply, not
-  // just another flat item under the top-level post. Walked depth-first so
-  // each node knows how deep to indent, and each parent's own children stay
-  // grouped together (chronological within a parent) instead of interleaved
-  // by global timestamp.
-  const threadNodes = useMemo(() => {
+  // A reply can target any comment (not just the root post) so the composer
+  // can prefill "@whoever-it-was" — but the thread itself always renders as
+  // one flat, chronological list, not indented by who-replied-to-whom. That
+  // keeps it readable when several people reply to the same comment (or to
+  // each other) instead of the list marching sideways off-screen.
+  const threadReplyIds = useMemo(() => {
     const childrenByParent = new Map<string, string[]>()
     for (const id of postOrder) {
       const parentId = posts[id]?.parentId
@@ -46,18 +46,15 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
       if (list) list.push(id)
       else childrenByParent.set(parentId, [id])
     }
-    for (const list of childrenByParent.values()) {
-      list.sort((a, b) => (posts[a]?.createdAt ?? 0) - (posts[b]?.createdAt ?? 0))
-    }
-    const result: { id: string; depth: number }[] = []
-    const visit = (parentId: string, depth: number) => {
+    const result: string[] = []
+    const visit = (parentId: string) => {
       for (const childId of childrenByParent.get(parentId) ?? []) {
-        result.push({ id: childId, depth })
-        visit(childId, depth + 1)
+        result.push(childId)
+        visit(childId)
       }
     }
-    visit(postId, 0)
-    return result
+    visit(postId)
+    return result.sort((a, b) => (posts[a]?.createdAt ?? 0) - (posts[b]?.createdAt ?? 0))
   }, [postOrder, posts, postId])
 
   const handleReply = () => {
@@ -192,19 +189,9 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
           </div>
         </div>
 
-        {threadNodes.length > 0 ? (
-          threadNodes.map(({ id, depth }) => (
-            <div
-              key={id}
-              style={depth > 0 ? { marginLeft: Math.min(depth, 5) * 16 } : undefined}
-              className={
-                depth > 0
-                  ? 'border-l-2 border-sky-200 bg-sky-50/40 dark:border-sky-900/60 dark:bg-sky-500/[0.03]'
-                  : undefined
-              }
-            >
-              <PostCard postId={id} onOpenProfile={onOpenProfile} onReply={handleOpenComposer} />
-            </div>
+        {threadReplyIds.length > 0 ? (
+          threadReplyIds.map((id) => (
+            <PostCard key={id} postId={id} onOpenProfile={onOpenProfile} onReply={handleOpenComposer} />
           ))
         ) : (
           <p className="p-8 text-center text-sm text-neutral-500">No replies yet. Be the first.</p>

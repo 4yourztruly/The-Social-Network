@@ -28,20 +28,17 @@ html {
   /* `100%` here is a static/large-viewport measurement, which on mobile
      Safari/Chrome can be TALLER than the actual visible (dynamic) viewport
      when the address bar is hidden — leaving a gap of plain body background
-     below the app shell (which sizes itself with 100svh, see App.tsx),
-     pushing the bottom nav up off the true bottom edge. Matching the same
-     unit here keeps every ancestor in the height:100% chain in sync with the
-     app shell, so there's nothing left below it to leave a gap.
-     `svh` (small viewport height — the viewport WITH the keyboard/URL bar
-     visible) is used rather than `dvh` deliberately: `dvh` recomputes live
-     as the on-screen keyboard opens/closes or the URL bar shows/hides,
-     which on some mobile browsers doesn't happen in sync with layout and
-     was the actual cause of the bottom nav visibly jumping/floating
-     mid-viewport. `svh` never changes after first paint, so nothing here
-     ever reflows out from under the player.
+     below the app shell, pushing the bottom nav up off the true bottom
+     edge. `--app-height` (set in JS — see useViewportHeight.ts) is the
+     actual measured viewport in pixels, which is what the app shell itself
+     sizes to (see App.tsx); matching it here keeps every ancestor in the
+     height:100% chain in sync, so there's nothing left below it to leave a
+     gap. `100svh` is only the pre-JS/no-JS fallback: iOS's standalone
+     (Home Screen) WKWebView has historically undercounted `svh`/`dvh`
+     itself, which is the actual bug `--app-height` exists to route around.
      Stops mobile browsers auto-inflating text size in landscape/columns
      too, which otherwise fights with our own responsive type scale. */
-  height: 100svh;
+  height: var(--app-height, 100svh);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }

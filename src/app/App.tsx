@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTheme } from './useTheme'
 import { usePersistence } from './usePersistence'
 import { useSchedulerTick } from './useSchedulerTick'
+import { useViewportHeight } from './useViewportHeight'
 import { BottomNav, type Screen } from './BottomNav'
 import { SidebarNav } from './SidebarNav'
 import { Feed } from '../features/feed/Feed'
@@ -30,6 +31,7 @@ export default function App() {
   useTheme()
   usePersistence()
   useSchedulerTick()
+  useViewportHeight()
 
   const onboarded = useGameStore((s) => s.onboarded)
   const dayNumber = useGameStore((s) => s.gameDay)
@@ -69,7 +71,11 @@ export default function App() {
     return (
       <div
         className="mx-auto flex w-full max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
-        style={{ height: '100svh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        style={{
+          height: 'var(--app-height, 100svh)',
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
       >
         <Onboarding />
       </div>
@@ -151,7 +157,7 @@ export default function App() {
   return (
     <div
       className="relative mx-auto flex w-full max-w-xl overflow-hidden md:max-w-4xl"
-      style={{ height: '100svh' }}
+      style={{ height: 'var(--app-height, 100svh)' }}
     >
       <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
