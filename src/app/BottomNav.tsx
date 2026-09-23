@@ -7,12 +7,15 @@ interface BottomNavProps {
   onNavigate: (screen: Screen) => void
 }
 
-export function BottomNav({ screen, onNavigate }: BottomNavProps) {
+// Fixed to the true bottom of the physical viewport — not a flex child of
+// the app shell — so it can never be dragged out of position by the
+// shell's own height glitching (iOS standalone WKWebView's svh/dvh bugs,
+// the keyboard opening, etc. — see useViewportHeight.ts). A same-sized
+// spacer below reserves the space in normal flow so scrolling content
+// never renders underneath it.
+function NavBar({ screen, onNavigate }: BottomNavProps) {
   return (
-    <nav
-      className="flex shrink-0 border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-    >
+    <nav className="flex border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       {NAV_ITEMS.map(({ screen: s, label, Icon }) => (
         <button
           key={s}
@@ -34,5 +37,21 @@ export function BottomNav({ screen, onNavigate }: BottomNavProps) {
         </button>
       ))}
     </nav>
+  )
+}
+
+export function BottomNav({ screen, onNavigate }: BottomNavProps) {
+  return (
+    <>
+      <div aria-hidden className="invisible shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <NavBar screen={screen} onNavigate={onNavigate} />
+      </div>
+      <div
+        className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-xl md:max-w-4xl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <NavBar screen={screen} onNavigate={onNavigate} />
+      </div>
+    </>
   )
 }

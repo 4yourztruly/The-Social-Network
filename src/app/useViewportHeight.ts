@@ -7,6 +7,14 @@ import { useEffect } from 'react'
 // actual visible viewport in JS and exposing it as a CSS var sidesteps the
 // CSS unit entirely — this is the pixel height the browser itself reports,
 // so it can't be wrong the way the CSS keyword can be.
+//
+// Deliberately only measured on mount and on orientationchange — NOT on
+// every 'resize'/visualViewport 'resize'. Those also fire when the
+// on-screen keyboard opens (e.g. typing a post or activity reply), which
+// would shrink --app-height to the space above the keyboard; on iOS's
+// standalone WKWebView that shrunk value has been observed to not reliably
+// restore once the keyboard closes, permanently pushing the bottom nav up.
+// Measuring once avoids ever picking up a keyboard-shrunk height at all.
 export function useViewportHeight() {
   useEffect(() => {
     const setHeight = () => {
@@ -14,13 +22,9 @@ export function useViewportHeight() {
       document.documentElement.style.setProperty('--app-height', `${height}px`)
     }
     setHeight()
-    window.addEventListener('resize', setHeight)
-    window.addEventListener('orientationchange', setHeight)
-    window.visualViewport?.addEventListener('resize', setHeight)
-    return () => {
-      window.removeEventListener('resize', setHeight)
-      window.removeEventListener('orientationchange', setHeight)
-      window.visualViewport?.removeEventListener('resize', setHeight)
-    }
+    // Dimensions aren't final the instant orientationchange fires.
+    const onOrientationChange = () => setTimeout(setHeight, 100)
+    window.addEventListener('orientationchange', onOrientationChange)
+    return () => window.removeEventListener('orientationchange', onOrientationChange)
   }, [])
 }
