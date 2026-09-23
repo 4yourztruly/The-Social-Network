@@ -10,6 +10,7 @@ import { formatRelativeTime } from '../../engine/time'
 import { useActiveStoryAuthors } from './useActiveStoryAuthors'
 import { ReplyIcon } from '../../components/icons'
 import { isViewableProfile } from '../../engine/npcTier'
+import { MentionText } from '../../components/MentionText'
 
 const STORY_DURATION_MS = 5000
 
@@ -198,15 +199,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
             {author.verified && <VerifiedBadge />}
           </span>
           <span className="text-xs text-white/70">{formatRelativeTime(story.createdAt)}</span>
-          <button
-            onClick={() => setShowComments(true)}
-            aria-label="View comments"
-            className="ml-auto flex items-center gap-1 rounded-full p-2.5 text-sm hover:bg-white/10"
-          >
-            <ReplyIcon className="h-5 w-5" />
-            {commentCount > 0 && <span>{commentCount}</span>}
-          </button>
-          <button onClick={onClose} className="rounded-full p-2.5 text-xl leading-none hover:bg-white/10">
+          <button onClick={onClose} className="ml-auto rounded-full p-2.5 text-xl leading-none hover:bg-white/10">
             ×
           </button>
         </div>
@@ -235,24 +228,35 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
           <p className="text-center text-2xl font-semibold leading-snug drop-shadow">{story.text}</p>
         </div>
 
-        {authorId !== PLAYER_ID && isNPC(author) && isDmAvailable(author) && (
-          <div className="flex items-center gap-2 px-3 pb-4">
-            <input
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value.slice(0, 280))}
-              onKeyDown={(e) => e.key === 'Enter' && handleReply()}
-              placeholder={`Reply to ${shortNameFor(author.displayName)}'s story`}
-              className="min-w-0 flex-1 rounded-full border border-white/40 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/70 outline-none focus:border-white"
-            />
-            <button
-              onClick={handleReply}
-              disabled={!replyText.trim()}
-              className="shrink-0 text-sm font-semibold disabled:opacity-40"
-            >
-              Send
-            </button>
-          </div>
-        )}
+        <div className="flex flex-col gap-2 px-3 pb-4">
+          {authorId !== PLAYER_ID && isNPC(author) && isDmAvailable(author) && (
+            <div className="flex items-center gap-2">
+              <input
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value.slice(0, 280))}
+                onKeyDown={(e) => e.key === 'Enter' && handleReply()}
+                placeholder={`Reply to ${shortNameFor(author.displayName)}'s story`}
+                className="min-w-0 flex-1 rounded-full border border-white/40 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/70 outline-none focus:border-white"
+              />
+              <button
+                onClick={handleReply}
+                disabled={!replyText.trim()}
+                className="shrink-0 text-sm font-semibold disabled:opacity-40"
+              >
+                Send
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setShowComments(true)}
+            aria-label="View comments"
+            className="flex w-full items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm text-white/70 hover:bg-white/20"
+          >
+            <ReplyIcon className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate text-left">Add a comment...</span>
+            {commentCount > 0 && <span className="shrink-0 text-xs text-white/50">{commentCount}</span>}
+          </button>
+        </div>
 
         {showComments && (
           <div
@@ -284,8 +288,12 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
                     return (
                       <div
                         key={id}
-                        style={depth > 0 ? { marginLeft: Math.min(depth, 6) * 20 } : undefined}
-                        className={`flex items-start gap-2 py-2 ${depth > 0 ? 'border-l-2 border-neutral-100 pl-2 dark:border-neutral-800' : ''}`}
+                        style={depth > 0 ? { marginLeft: Math.min(depth, 5) * 16 } : undefined}
+                        className={`flex items-start gap-2 rounded-xl py-2 ${
+                          depth > 0
+                            ? 'border-l-2 border-sky-200 bg-sky-50/40 pl-2 dark:border-sky-900/60 dark:bg-sky-500/[0.03]'
+                            : ''
+                        }`}
                       >
                         <Avatar avatar={commenter.avatar} seed={commenter.id} size={28} />
                         <div className="min-w-0 flex-1">
@@ -300,7 +308,11 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
                             ) : (
                               <span className="font-semibold">{commenter.displayName}</span>
                             )}{' '}
-                            {comment.text}
+                            {onOpenProfile ? (
+                              <MentionText text={comment.text} onOpenProfile={onOpenProfile} />
+                            ) : (
+                              comment.text
+                            )}
                           </p>
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
                             <span>{formatRelativeTime(comment.createdAt)}</span>

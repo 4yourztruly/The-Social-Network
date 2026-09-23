@@ -196,8 +196,12 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
           threadNodes.map(({ id, depth }) => (
             <div
               key={id}
-              style={depth > 0 ? { marginLeft: Math.min(depth, 6) * 20 } : undefined}
-              className={depth > 0 ? 'border-l-2 border-neutral-100 dark:border-neutral-800' : undefined}
+              style={depth > 0 ? { marginLeft: Math.min(depth, 5) * 16 } : undefined}
+              className={
+                depth > 0
+                  ? 'border-l-2 border-sky-200 bg-sky-50/40 dark:border-sky-900/60 dark:bg-sky-500/[0.03]'
+                  : undefined
+              }
             >
               <PostCard postId={id} onOpenProfile={onOpenProfile} onReply={handleOpenComposer} />
             </div>
