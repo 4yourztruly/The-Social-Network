@@ -25,7 +25,7 @@ export default defineConfig({
         description: 'A social-media life sim for a professional footballer.',
         theme_color: '#0f172a',
         background_color: '#0f172a',
-        display: 'standalone',
+        display: 'fullscreen',
         // Relative, not absolute — resolved against `base` above, so this
         // still works whether the app is served from / or /The-Social-Network/.
         start_url: '.',
