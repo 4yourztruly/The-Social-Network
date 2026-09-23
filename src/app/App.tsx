@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTheme } from './useTheme'
 import { usePersistence } from './usePersistence'
 import { useSchedulerTick } from './useSchedulerTick'
+import { useViewportHeight } from './useViewportHeight'
 import { BottomNav, type Screen } from './BottomNav'
 import { SidebarNav } from './SidebarNav'
 import { Feed } from '../features/feed/Feed'
@@ -30,6 +31,7 @@ export default function App() {
   useTheme()
   usePersistence()
   useSchedulerTick()
+  useViewportHeight()
 
   const onboarded = useGameStore((s) => s.onboarded)
   const dayNumber = useGameStore((s) => s.gameDay)

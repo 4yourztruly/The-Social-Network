@@ -25,24 +25,22 @@ body,
 }
 
 html {
-  /* `100%` here is a static/large-viewport measurement, which on mobile
-     Safari/Chrome (and iOS's standalone Home Screen WKWebView) can be
-     TALLER than the actual visible viewport — leaving a gap of plain body
-     background below the app shell, pushing the bottom nav up off the true
-     bottom edge. `100dvh` (dynamic viewport height) is the unit built
-     specifically to track the real, current visible viewport; `100svh` on
-     the line before it is only a fallback for browsers that don't support
-     `dvh` yet — a browser that DOES support `dvh` simply overrides it via
-     the normal CSS cascade (later declaration of the same property wins),
-     it never "picks the smaller of the two" or anything like that. Previous
-     attempts at this used a JS-measured height instead specifically to
-     avoid `dvh`, over a worry that it would recompute mid-keyboard-open and
-     visibly jump the layout — but that risk applies to the *shell*, not
-     this rule alone, and every JS-based attempt so far has caused a worse,
-     harder-to-diagnose version of the same bug. Standard `dvh` is what
-     every other production mobile web app uses for exactly this problem. */
+  /* Three-layer fallback, weakest first so each later line only applies
+     where the browser understands it (plain CSS cascade, not "smallest
+     wins"): `100%` is dropped in favor of `100svh` everywhere that
+     understands it, which is dropped in favor of `100dvh` everywhere that
+     understands THAT. `100dvh` (dynamic viewport height) is the unit built
+     specifically to track the real, current visible viewport — but iOS's
+     standalone (Home Screen) WKWebView has been observed not to always
+     recompute it when the on-screen keyboard closes via its own native
+     "Done" button. `--app-height` (see useViewportHeight.ts) is a JS
+     measurement of the same thing via the visualViewport API, which DOES
+     reliably fire for that case; it wins last, when set, via `var()`'s
+     fallback syntax — everything above it is only what renders before that
+     effect runs, or on a browser where it's unavailable. */
   height: 100svh;
   height: 100dvh;
+  height: var(--app-height, 100dvh);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -54,14 +52,16 @@ body {
 }
 
 /* The app's fixed-height root shell (both the pre-onboarding screen and the
-   main authenticated shell in App.tsx) — same `svh`-then-`dvh` cascade as
-   `html` above, and for the same reason. Only a CSS class (not an inline
-   style) can do this progressive-override trick: an inline `style` object
-   can hold one value per property, so `dvh` there would just be dropped
-   outright by a browser that doesn't parse it, leaving `height` unset. */
+   main authenticated shell in App.tsx) — same fallback chain as `html`
+   above, and for the same reason. Only a CSS class (not an inline style)
+   can do this progressive-override trick: an inline `style` object can
+   hold one value per property, so `dvh`/`var()` there would just be
+   dropped outright by a browser that doesn't parse it, leaving `height`
+   unset. */
 .app-shell {
   height: 100svh;
   height: 100dvh;
+  height: var(--app-height, 100dvh);
 }
 
 .dark body {

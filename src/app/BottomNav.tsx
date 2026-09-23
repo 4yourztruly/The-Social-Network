@@ -12,10 +12,10 @@ interface BottomNavProps {
 // element can visually detach and freeze in place after a nested
 // overflow-y-auto pane (Compose, PostThread, Profile, ...) is scrolled and
 // then navigated away from mid-scroll. The shell itself never scrolls
-// (html/body/#root are overflow:hidden — see index.css), and its own
-// height is plain CSS `dvh` (the app-shell class, also index.css) rather
-// than anything JS-measured, so this being the shell's last flex child is
-// enough to keep it pinned to the true bottom edge.
+// (html/body/#root are overflow:hidden — see index.css), so as long as the
+// shell's own height (the app-shell class + useViewportHeight, see
+// index.css/App.tsx) stays correct, this being the shell's last flex child
+// is enough to keep it pinned to the true bottom edge.
 export function BottomNav({ screen, onNavigate }: BottomNavProps) {
   return (
     <nav
