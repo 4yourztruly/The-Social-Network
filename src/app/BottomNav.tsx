@@ -8,11 +8,47 @@ interface BottomNavProps {
   onNavigate: (screen: Screen) => void
 }
 
-function NavBar({ screen, onNavigate, navRef }: BottomNavProps & { navRef?: React.RefObject<HTMLElement | null> }) {
+// A single, plain in-flow flex child of the app shell (the shell itself is
+// `fixed inset-0` — see App.tsx — so this already sits flush with the true
+// bottom edge at rest, no separate fixed/spacer copy needed for that part).
+//
+// The one thing normal flow can't handle is the on-screen keyboard: iOS
+// doesn't resize anything when it opens, it just changes which part of the
+// screen is currently visible (window.visualViewport). So on top of the
+// normal layout position, a live transform nudges this exact element to
+// stay inside whatever's actually visible right now — read fresh from the
+// browser on every keyboard open/close/animation frame, nothing cached or
+// computed to get stuck on.
+export function BottomNav({ screen, onNavigate }: BottomNavProps) {
+  const navRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+
+    const update = () => {
+      const nav = navRef.current
+      if (!nav) return
+      // How far the visible rectangle's bottom edge sits above the true
+      // layout-viewport bottom (0 when nothing — no keyboard, no browser
+      // chrome — is covering any of it).
+      const coveredBy = window.innerHeight - (vv.height + vv.offsetTop)
+      nav.style.transform = coveredBy > 0.5 ? `translateY(-${coveredBy}px)` : ''
+    }
+
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
+
   return (
     <nav
       ref={navRef}
-      className="flex border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      className="relative flex shrink-0 border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {NAV_ITEMS.map(({ screen: s, label, Icon }) => (
@@ -36,56 +72,5 @@ function NavBar({ screen, onNavigate, navRef }: BottomNavProps & { navRef?: Reac
         </button>
       ))}
     </nav>
-  )
-}
-
-// Every previous attempt at this (CSS `dvh`, JS-measured height, forced
-// reflow, a `fixed` shell) tried to make some ancestor's HEIGHT correctly
-// track the keyboard opening/closing on iOS — and kept finding new ways to
-// get that stuck. This sidesteps the question of "how tall is everything"
-// entirely: `window.visualViewport` reports the ACTUAL currently-visible
-// rectangle, live, on every change (keyboard opening/closing/animating,
-// the page panning to reveal a focused field, Safari's own chrome
-// showing/hiding) — no recomputation to get stuck on, because nothing is
-// ever cached; it's re-read from the browser on every single event. The
-// nav is pinned to the bottom of THAT rectangle directly, continuously, via
-// a transform — not to any element's height.
-export function BottomNav({ screen, onNavigate }: BottomNavProps) {
-  const navRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-
-    const update = () => {
-      const nav = navRef.current
-      if (!nav) return
-      // How far the visible rectangle's bottom edge sits above the true
-      // layout-viewport bottom (0 when nothing — no keyboard, no chrome —
-      // is covering any of it).
-      const coveredBy = window.innerHeight - (vv.height + vv.offsetTop)
-      nav.style.transform = coveredBy > 0.5 ? `translateY(-${coveredBy}px)` : ''
-    }
-
-    update()
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-    }
-  }, [])
-
-  return (
-    <>
-      {/* Reserves the nav's own height in normal flow so scrolling content
-          never renders underneath the real, fixed copy below. */}
-      <div aria-hidden className="invisible shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <NavBar screen={screen} onNavigate={onNavigate} />
-      </div>
-      <div className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-xl md:max-w-4xl">
-        <NavBar screen={screen} onNavigate={onNavigate} navRef={navRef} />
-      </div>
-    </>
   )
 }
