@@ -68,8 +68,16 @@ export default function App() {
   if (!onboarded) {
     return (
       <div
-        className="fixed inset-0 mx-auto flex max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+        className="fixed inset-x-0 top-0 mx-auto flex max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
         style={{
+          // A raw `bottom: 0` on a fixed element was confirmed (via an
+          // on-device test with a marker pinned to literal bottom:0) to
+          // land at the SAFE-AREA boundary here, not the true physical
+          // screen edge, despite viewport-fit=cover — so `bottom: 0` alone
+          // leaves a gap the size of the home indicator's safe area below
+          // everything. Pushing past it by that same amount lands exactly
+          // on the true edge instead.
+          bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))',
           paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
@@ -175,11 +183,27 @@ export default function App() {
 
   return (
     <>
-      {/* TEMPORARY diagnostic markers — not a fix, just to see exactly
-          where things actually land on a real device. Remove once we know. */}
-      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, height: 12, background: 'red', zIndex: 99999 }} />
-      <div style={{ position: 'fixed', left: 0, right: 0, top: 0, height: 12, background: 'blue', zIndex: 99999 }} />
-      <div className="fixed inset-0 mx-auto flex max-w-xl overflow-hidden border-4 border-lime-400 md:max-w-4xl">
+      {/* TEMPORARY diagnostic marker — green pinned to literal bottom:0 (the
+          old, confirmed-wrong reference point), red pinned to the corrected
+          position the shell below now actually uses. If red sits at the
+          true physical edge and green sits ~1cm above it, that confirms the
+          fix; remove both once confirmed. */}
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, height: 8, background: 'lime', zIndex: 99999 }} />
+      <div
+        style={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))',
+          height: 8,
+          background: 'red',
+          zIndex: 99999,
+        }}
+      />
+      <div
+        className="fixed inset-x-0 top-0 mx-auto flex max-w-xl overflow-hidden md:max-w-4xl"
+        style={{ bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }}
+      >
         <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
       <div
