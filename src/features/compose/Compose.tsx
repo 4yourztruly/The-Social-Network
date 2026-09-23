@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { useGameStore, PLAYER_ID, type PostOutcome } from '../../store/gameStore'
+import { useGameStore, PLAYER_ID } from '../../store/gameStore'
 import { Avatar } from '../../components/Avatar'
 import { scanKeywordTags } from '../../engine/keywordTagger'
 import { CAREER_PACKS } from '../../content/careers'
@@ -9,7 +9,7 @@ const MAX_LENGTH = 280
 const MAX_SUGGESTIONS = 5
 
 interface ComposeProps {
-  onPosted: (outcome: PostOutcome) => void
+  onPosted: () => void
 }
 
 export function Compose({ onPosted }: ComposeProps) {
@@ -63,9 +63,9 @@ export function Compose({ onPosted }: ComposeProps) {
 
   const handlePost = () => {
     if (!caption.trim()) return
-    const outcome = submitPlayerPost({ caption })
+    submitPlayerPost({ caption })
     setCaption('')
-    onPosted(outcome)
+    onPosted()
   }
 
   if (!player) return null

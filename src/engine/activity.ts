@@ -87,6 +87,39 @@ export function computeRsvp(npc: NPC, rng: RNG): RsvpDecision {
   return rng() < chance ? 'accepted' : 'declined'
 }
 
+// A tabloid/insider "leak" post needs to reference the actual thing that
+// happened — the generic reactionPool lines have nothing to plug in and
+// read as vague filler ("you won't believe this"). This builds a templated
+// line around the real description/tags/participants instead.
+export function buildTabloidLeakLine(
+  rng: RNG,
+  playerDisplayName: string,
+  description: string,
+  tags: readonly string[],
+  participantNames: readonly string[],
+): string {
+  const withWho = participantNames.length > 0 ? participantNames.join(' and ') : null
+  if (tags.includes('relationship') || tags.includes('party')) {
+    const templates = withWho
+      ? [
+          `Paparazzi caught ${playerDisplayName} with ${withWho}. Is there a new power couple in town? 👀`,
+          `Spotted: ${playerDisplayName} and ${withWho}, together. Sources say it's more than friendly.`,
+          `${playerDisplayName} and ${withWho} were seen out together — the timeline has questions.`,
+        ]
+      : [
+          `Paparazzi caught ${playerDisplayName} out last night — more on this developing story soon.`,
+          `Spotted: ${playerDisplayName}, somewhere they maybe didn't want to be seen. 👀`,
+        ]
+    return pick(rng, templates)
+  }
+  const templates = [
+    `Sources close to ${playerDisplayName} confirm: ${description}`,
+    `Exclusive: what really happened with ${playerDisplayName} — ${description}`,
+    `Word is spreading about ${playerDisplayName} — ${description}`,
+  ]
+  return pick(rng, templates)
+}
+
 // 0 when nothing newsworthy happened; otherwise a base chance that climbs
 // with how risky the activity was and how long it ran, capped well under
 // certain so a leak is never guaranteed.

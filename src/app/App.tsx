@@ -20,7 +20,7 @@ import { StoryViewer } from '../features/stories/StoryViewer'
 import { AddStory } from '../features/stories/AddStory'
 import { EventButton } from '../features/event/EventButton'
 import { EventModal } from '../features/event/EventModal'
-import { PLAYER_ID, useGameStore, type PostOutcome } from '../store/gameStore'
+import { PLAYER_ID, useGameStore } from '../store/gameStore'
 import { PeopleIcon } from '../components/icons'
 import { OutcomeBanner } from '../components/OutcomeBanner'
 import { isNPC } from '../types'
@@ -44,7 +44,8 @@ export default function App() {
   const [viewedStoryAuthorIds, setViewedStoryAuthorIds] = useState<Set<string>>(new Set())
   const [showSettings, setShowSettings] = useState(false)
   const [showPeople, setShowPeople] = useState(false)
-  const [postOutcome, setPostOutcome] = useState<PostOutcome | null>(null)
+  const lastOutcomeReport = useGameStore((s) => s.lastOutcomeReport)
+  const dismissOutcomeReport = useGameStore((s) => s.dismissOutcomeReport)
 
   // App never remounts across an onboarding reset (Settings > "Start a new
   // profile"), so all this local nav/overlay state otherwise survives it —
@@ -117,9 +118,8 @@ export default function App() {
     setScreen(next)
   }
 
-  const handlePosted = (outcome: PostOutcome) => {
+  const handlePosted = () => {
     setScreen('feed')
-    setPostOutcome(outcome)
   }
 
   let overlay: React.ReactNode = null
@@ -159,9 +159,9 @@ export default function App() {
         className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 md:border-x md:border-neutral-200 md:dark:border-neutral-800"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        {postOutcome && (
+        {lastOutcomeReport && (
           <div className="absolute inset-x-0 z-50" style={{ top: 'env(safe-area-inset-top)' }}>
-            <OutcomeBanner outcome={postOutcome} onDismiss={() => setPostOutcome(null)} />
+            <OutcomeBanner report={lastOutcomeReport} onDismiss={dismissOutcomeReport} onOpenProfile={handleOpenProfile} />
           </div>
         )}
 

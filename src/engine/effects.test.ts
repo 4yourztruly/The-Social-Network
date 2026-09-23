@@ -35,14 +35,20 @@ describe('applyPlayerEffects', () => {
     expect(next.aura).toBe(0)
   })
 
-  it('ignores followers/mood/relationship effects (handled elsewhere)', () => {
+  it('ignores followers/mood/relationship effects for humor/aura (handled elsewhere)', () => {
     const before = basePlayer()
     const next = applyPlayerEffects(before, [
       { type: 'followers', delta: 500 },
       { type: 'mood', target: 'npc_1', delta: 2 },
       { type: 'relationship', target: 'npc_1', delta: 5 },
     ])
-    expect(next).toEqual(before)
+    expect(next.humor).toBe(before.humor)
+    expect(next.aura).toBe(before.aura)
+  })
+
+  it('always grants at least the base XP for taking an action', () => {
+    const next = applyPlayerEffects(basePlayer(), [{ type: 'followers', delta: 500 }])
+    expect(next.xp).toBeGreaterThan(0)
   })
 })
 

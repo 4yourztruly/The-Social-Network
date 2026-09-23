@@ -34,6 +34,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
   const [replyText, setReplyText] = useState('')
   const [showComments, setShowComments] = useState(false)
   const [commentText, setCommentText] = useState('')
+  const [commentTarget, setCommentTarget] = useState<{ id: string; username: string } | null>(null)
   // Press-and-hold pauses the story (progress bar + auto-advance), like
   // Instagram — a quick tap still navigates, a sustained press just pauses
   // and resumes on release without jumping anywhere.
@@ -53,15 +54,34 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
   const story = stories[storyIndex]
   const authorPos = authorIds.indexOf(authorId)
 
-  const commentIds = useMemo(
-    () =>
-      story
-        ? postOrder
-            .filter((id) => posts[id]?.parentId === story.id)
-            .sort((a, b) => (posts[a]?.createdAt ?? 0) - (posts[b]?.createdAt ?? 0))
-        : [],
-    [postOrder, posts, story],
-  )
+  // Comments nest just like a post's — a reply to a comment is a genuine
+  // child of that comment. commentCount is the flat total (for the header
+  // badge); commentNodes is the depth-first tree used to render it.
+  const { commentNodes, commentCount } = useMemo(() => {
+    if (!story) return { commentNodes: [] as { id: string; depth: number }[], commentCount: 0 }
+    const childrenByParent = new Map<string, string[]>()
+    let count = 0
+    for (const id of postOrder) {
+      const parentId = posts[id]?.parentId
+      if (!parentId) continue
+      const list = childrenByParent.get(parentId)
+      if (list) list.push(id)
+      else childrenByParent.set(parentId, [id])
+    }
+    for (const list of childrenByParent.values()) {
+      list.sort((a, b) => (posts[a]?.createdAt ?? 0) - (posts[b]?.createdAt ?? 0))
+    }
+    const result: { id: string; depth: number }[] = []
+    const visit = (parentId: string, depth: number) => {
+      for (const childId of childrenByParent.get(parentId) ?? []) {
+        result.push({ id: childId, depth })
+        count++
+        visit(childId, depth + 1)
+      }
+    }
+    visit(story.id, 0)
+    return { commentNodes: result, commentCount: count }
+  }, [postOrder, posts, story])
 
   useEffect(() => {
     setStoryIndex(0)
@@ -112,8 +132,16 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
 
   const handleComment = () => {
     if (!commentText.trim() || !story) return
-    addPlayerReply(story.id, commentText)
+    addPlayerReply(commentTarget?.id ?? story.id, commentText)
     setCommentText('')
+    setCommentTarget(null)
+  }
+
+  const handleReplyToComment = (targetId: string) => {
+    const targetAuthor = profiles[posts[targetId]?.authorId ?? '']
+    if (!targetAuthor) return
+    setCommentTarget({ id: targetId, username: targetAuthor.username })
+    setCommentText(`@${targetAuthor.username} `)
   }
 
   const handlePointerDown = () => {
@@ -176,7 +204,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
             className="ml-auto flex items-center gap-1 rounded-full p-2.5 text-sm hover:bg-white/10"
           >
             <ReplyIcon className="h-5 w-5" />
-            {commentIds.length > 0 && <span>{commentIds.length}</span>}
+            {commentCount > 0 && <span>{commentCount}</span>}
           </button>
           <button onClick={onClose} className="rounded-full p-2.5 text-xl leading-none hover:bg-white/10">
             ×
@@ -236,7 +264,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-                <p className="text-sm font-semibold">Comments</p>
+                <p className="text-sm font-semibold">Comments ({commentCount})</p>
                 <button
                   onClick={() => setShowComments(false)}
                   className="rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -246,15 +274,19 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
-                {commentIds.length > 0 ? (
-                  commentIds.map((id) => {
+                {commentNodes.length > 0 ? (
+                  commentNodes.map(({ id, depth }) => {
                     const comment = posts[id]
                     if (!comment) return null
                     const commenter = profiles[comment.authorId]
                     if (!commenter) return null
                     const commenterViewable = !isNPC(commenter) || isViewableProfile(commenter)
                     return (
-                      <div key={id} className="flex items-start gap-2 py-2">
+                      <div
+                        key={id}
+                        style={depth > 0 ? { marginLeft: Math.min(depth, 6) * 20 } : undefined}
+                        className={`flex items-start gap-2 py-2 ${depth > 0 ? 'border-l-2 border-neutral-100 pl-2 dark:border-neutral-800' : ''}`}
+                      >
                         <Avatar avatar={commenter.avatar} seed={commenter.id} size={28} />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm">
@@ -270,7 +302,12 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
                             )}{' '}
                             {comment.text}
                           </p>
-                          <p className="mt-0.5 text-xs text-neutral-500">{formatRelativeTime(comment.createdAt)}</p>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
+                            <span>{formatRelativeTime(comment.createdAt)}</span>
+                            <button onClick={() => handleReplyToComment(id)} className="cursor-pointer font-semibold hover:underline">
+                              Reply
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )
@@ -280,7 +317,21 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
                 )}
               </div>
 
-              <div className="flex items-center gap-2 border-t border-neutral-200 px-4 py-2 dark:border-neutral-800">
+              {commentTarget && (
+                <div className="flex items-center justify-between border-t border-neutral-200 px-4 py-1.5 text-xs text-neutral-500 dark:border-neutral-800">
+                  <span>Replying to @{commentTarget.username}</span>
+                  <button
+                    onClick={() => {
+                      setCommentTarget(null)
+                      setCommentText('')
+                    }}
+                    className="cursor-pointer font-semibold hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <div className={`flex items-center gap-2 px-4 py-2 ${commentTarget ? '' : 'border-t border-neutral-200 dark:border-neutral-800'}`}>
                 {player && <Avatar avatar={player.avatar} seed={player.id} size={28} />}
                 <input
                   value={commentText}

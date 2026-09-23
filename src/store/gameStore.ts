@@ -39,7 +39,7 @@ import { isNPC } from '../types'
 import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
 import { createGameEvent } from '../engine/events'
-import { applyPlayerEffects, lastStatChangesFromEffects } from '../engine/effects'
+import { applyPlayerEffects, lastStatChangesFromEffects, xpFromEffects } from '../engine/effects'
 import { statDeltasForTags } from '../engine/formulas'
 import { splitDueItems } from '../engine/scheduler'
 import {
@@ -60,6 +60,7 @@ import { applyPersonalityVoice } from '../engine/voice'
 import {
   ACTIVITY_CHOICES,
   ACTIVITY_TURN_CAP,
+  buildTabloidLeakLine,
   computeRsvp,
   coverageChance,
   pickMediaOutlet,
@@ -88,11 +89,24 @@ const STORY_TTL_MS = 24 * 60 * 60 * 1000
 
 export const SAVE_VERSION = 6
 
-export interface PostOutcome {
-  postId: string
+export interface RelationshipChangeSummary {
+  npcId: string
+  delta: number
+}
+
+// The "report card" shown after posting, ending an activity, or resolving
+// an event — see components/OutcomeBanner.tsx. Set reactively on
+// GameState.lastOutcomeReport rather than returned from the triggering
+// action, since an activity/event's outcome can resolve asynchronously
+// (AI narration) well after the action call itself returns.
+export interface OutcomeReport {
+  kind: 'post' | 'activity' | 'event'
+  xpGained: number
   statDeltas: Effect[]
   followerDelta: number
-  commentCount: number
+  relationshipChanges: RelationshipChangeSummary[]
+  reason?: string
+  commentCount?: number
 }
 
 // The "Event" button's random encounter — ephemeral, not part of SaveGame
@@ -148,6 +162,10 @@ export interface GameState {
   activities: Record<string, Activity>
   activeEncounter: RandomEncounter | null
   onboarded: boolean
+  // The "report card" shown after posting/ending an activity/resolving an
+  // event — see OutcomeReport. Reactive rather than a callback so an
+  // activity/event's async (AI) outcome can still surface it once ready.
+  lastOutcomeReport: OutcomeReport | null
 
   // onboarding
   completeOnboarding: (input: OnboardingInput) => Promise<void>
@@ -165,9 +183,10 @@ export interface GameState {
 
   // feed actions
   toggleLike: (postId: string) => void
-  submitPlayerPost: (input: { caption: string }) => PostOutcome
+  submitPlayerPost: (input: { caption: string }) => void
   addPlayerReply: (parentId: string, text: string) => void
   submitPlayerStory: (caption: string) => void
+  dismissOutcomeReport: () => void
   tickScheduler: (now?: number) => void
 
   // DMs
@@ -518,25 +537,19 @@ export const useGameStore = create<GameState>((set, get) => {
   // activity — "tabloids post about rumours, paparazzi can catch you."
   // Reuses the exact same template pipeline as post comments, just
   // materialized as its own post instead of a reply.
-  function triggerMediaCoverage(outlet: NPC, description: string, tags: string[]) {
+  function triggerMediaCoverage(outlet: NPC, description: string, tags: string[], participantNames: string[] = []) {
     const state = get()
-    const pack = CAREER_PACKS[state.player.career]
     const playerProfile = state.profiles[PLAYER_ID] as Profile
     const rng = mulberry32(hashStringToSeed(`${outlet.id}_${Date.now()}_coverage`))
-    const linePool = pack.reactionPool[outlet.persona]
-    const selection = selectLine(rng, linePool, tags, outlet.recentLineIds)
-    const filled = fillTemplate(selection.line, {
-      player: playerProfile.displayName,
-      org: state.player.club || pack.worldName,
-    })
-    const fallbackText = applyPersonalityVoice(filled, outlet, rng)
-
-    set((s) => ({
-      profiles: {
-        ...s.profiles,
-        [outlet.id]: { ...outlet, recentLineIds: pushRecentLine(outlet.recentLineIds, selection.lineId) },
-      },
-    }))
+    // A leak needs to reference what actually happened — unlike ordinary
+    // tabloid flavor posts, this always has real context (description/tags/
+    // who was involved) to work with, so it skips the generic reactionPool
+    // draw entirely in favor of a templated line built around that context.
+    const fallbackText = applyPersonalityVoice(
+      buildTabloidLeakLine(rng, playerProfile.displayName, description, tags, participantNames),
+      outlet,
+      rng,
+    )
 
     function materializeCoveragePost(text: string, origin: Post['origin']) {
       set((s) => {
@@ -639,7 +652,15 @@ export const useGameStore = create<GameState>((set, get) => {
         deltas: outcome.statDeltas,
         summary: `Event: ${encounterText} — chose "${choice.label}". ${resolutionText}`,
       }
-      set((s) => ({ activityLog: [...s.activityLog, logEntry] }))
+      const report: OutcomeReport = {
+        kind: 'event',
+        xpGained: xpFromEffects(outcome.statDeltas),
+        statDeltas: outcome.statDeltas,
+        followerDelta: outcome.followerDelta,
+        relationshipChanges: [],
+        reason: resolutionText,
+      }
+      set((s) => ({ activityLog: [...s.activityLog, logEntry], lastOutcomeReport: report }))
       advanceDay()
 
       // A bad outcome can leak to the tabloids, same as a risky Activity —
@@ -692,6 +713,7 @@ export const useGameStore = create<GameState>((set, get) => {
   activities: {},
   activeEncounter: null,
   onboarded: false,
+  lastOutcomeReport: null,
 
   completeOnboarding: async (input) => {
     const pack = CAREER_PACKS[input.career]
@@ -767,6 +789,7 @@ export const useGameStore = create<GameState>((set, get) => {
       activities: {},
       activeEncounter: null,
       onboarded: true,
+      lastOutcomeReport: null,
     })
   },
 
@@ -945,14 +968,17 @@ export const useGameStore = create<GameState>((set, get) => {
     })
   },
 
+  dismissOutcomeReport: () => set({ lastOutcomeReport: null }),
+
   addPlayerReply: (parentId, text) => {
     const trimmed = text.trim()
     if (!trimmed) return
+    const replyId = makeId('post')
     set((state) => {
       const parent = state.posts[parentId]
       if (!parent) return state
       const reply: Post = {
-        id: makeId('post'),
+        id: replyId,
         authorId: PLAYER_ID,
         kind: 'reply',
         parentId,
@@ -978,7 +1004,8 @@ export const useGameStore = create<GameState>((set, get) => {
     // People reply when replied to — whoever's post this is gets a
     // guaranteed comment back, reacting to what the player just said (AI
     // path), or a personality-flavored template line otherwise. Never the
-    // player replying to themselves.
+    // player replying to themselves. Nests as a child of the player's own
+    // new reply (continuing the thread downward), not a sibling of it.
     const state = get()
     const parent = state.posts[parentId]
     const parentAuthor = parent ? state.profiles[parent.authorId] : undefined
@@ -1006,7 +1033,13 @@ export const useGameStore = create<GameState>((set, get) => {
           id: makeId('sched'),
           dueAt: Date.now(),
           kind: 'comment',
-          payload: { parentPostId: parentId, npcId: parentAuthor.id, text: fallbackText, tags: [], aiEligible: true },
+          // parentPostId points at the player's own new reply (replyId), not
+          // the original parent — nests the NPC's response as a child of
+          // what the player just said, and (via processComments' AI
+          // grounding, which reads this same field's post text) means the
+          // AI reacts to the player's actual words instead of the original
+          // post/comment.
+          payload: { parentPostId: replyId, npcId: parentAuthor.id, text: fallbackText, tags: [], aiEligible: true },
         },
       ])
     }
@@ -1143,6 +1176,7 @@ export const useGameStore = create<GameState>((set, get) => {
     // @mentioning someone actually does something — a small relationship
     // bump, so tagging people isn't purely cosmetic.
     const mentionedIds = extractMentionedIds(text, buildUsernameIndex(state.profiles))
+    const relationshipChanges: RelationshipChangeSummary[] = []
     for (const npcId of mentionedIds) {
       const npc = updatedProfiles[npcId]
       if (npc && isNPC(npc)) {
@@ -1151,6 +1185,7 @@ export const useGameStore = create<GameState>((set, get) => {
           relationship: Math.min(100, npc.relationship + 2),
           lastRelationshipChange: { delta: 2, reason: 'You tagged them in a post.', at: now },
         }
+        relationshipChanges.push({ npcId, delta: 2 })
       }
     }
 
@@ -1163,12 +1198,23 @@ export const useGameStore = create<GameState>((set, get) => {
       summary: `Posted: "${text.length > 60 ? `${text.slice(0, 60)}…` : text}"`,
     }
 
+    const report: OutcomeReport = {
+      kind: 'post',
+      xpGained: xpFromEffects(result.statDeltas),
+      statDeltas: result.statDeltas,
+      followerDelta: result.followerDelta,
+      relationshipChanges,
+      reason: postReason,
+      commentCount: commentItems.length,
+    }
+
     set({
       posts: { ...state.posts, [post.id]: post },
       postOrder: [post.id, ...state.postOrder],
       profiles: updatedProfiles,
       player: nextPlayer,
       activityLog: [...state.activityLog, logEntry],
+      lastOutcomeReport: report,
     })
 
     // Comments materialize as fast as possible — instantly for the
@@ -1177,13 +1223,6 @@ export const useGameStore = create<GameState>((set, get) => {
     // still used for DMs' deliberate typing delay).
     processComments(commentItems)
     advanceDay()
-
-    return {
-      postId: post.id,
-      statDeltas: result.statDeltas,
-      followerDelta: result.followerDelta,
-      commentCount: commentItems.length,
-    }
   },
 
   sendPlayerMessage: (npcId, text) => {
@@ -1384,6 +1423,15 @@ export const useGameStore = create<GameState>((set, get) => {
       summary: `Activity: "${activity.description}"${names ? ` with ${names}` : ''}`,
     }
 
+    const report: OutcomeReport = {
+      kind: 'activity',
+      xpGained: xpFromEffects(statDeltas),
+      statDeltas,
+      followerDelta,
+      relationshipChanges: participants.map((npc) => ({ npcId: npc.id, delta: relationshipDelta })),
+      reason: outcomeSummary,
+    }
+
     set({
       profiles: updatedProfiles,
       player: nextPlayer,
@@ -1392,6 +1440,7 @@ export const useGameStore = create<GameState>((set, get) => {
         [activityId]: { ...activity, status: 'ended', endedAt: Date.now(), outcomeSummary },
       },
       activityLog: [...state.activityLog, logEntry],
+      lastOutcomeReport: report,
     })
     advanceDay()
 
@@ -1401,7 +1450,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (chance > 0 && rng() < chance) {
       const npcs = Object.values(get().profiles).filter(isNPC)
       const outlet = pickMediaOutlet(npcs)
-      if (outlet) triggerMediaCoverage(outlet, activity.description, activity.tags)
+      if (outlet) triggerMediaCoverage(outlet, activity.description, activity.tags, participants.map((p) => p.displayName))
     }
   },
 
@@ -1552,6 +1601,7 @@ export const useGameStore = create<GameState>((set, get) => {
       activities: save.activities,
       activeEncounter: null,
       onboarded: save.onboarded,
+      lastOutcomeReport: null,
     })
   },
 
@@ -1573,6 +1623,7 @@ export const useGameStore = create<GameState>((set, get) => {
       activities: {},
       activeEncounter: null,
       onboarded: false,
+      lastOutcomeReport: null,
     })
   },
 

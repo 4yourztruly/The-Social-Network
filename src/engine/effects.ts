@@ -6,11 +6,28 @@ function clamp(value: number): number {
   return Math.max(0, Math.min(100, value))
 }
 
+// Rough "how eventful was this" score, shown on the report card as XP —
+// a flat base for taking the action at all, plus more for bigger stat
+// swings and follower movement. Not tied to any progression system yet
+// (nothing spends XP), just a proportional reward signal.
+export function xpFromEffects(effects: readonly Effect[]): number {
+  let xp = 10
+  for (const effect of effects) {
+    if (effect.type === 'stat' && (effect.target === 'humor' || effect.target === 'aura')) {
+      xp += Math.abs(effect.delta) * 4
+    }
+    if (effect.type === 'followers') {
+      xp += Math.min(30, Math.round(Math.abs(effect.delta) / 2000))
+    }
+  }
+  return Math.round(xp)
+}
+
 // Applies Effect[] to the player's own stats. 'followers' targets the
 // player's Profile (not PlayerState) and 'mood'/'relationship' target an
 // NPC — both are handled by the caller, not here.
 export function applyPlayerEffects(player: PlayerState, effects: readonly Effect[]): PlayerState {
-  const next = { ...player }
+  const next = { ...player, xp: player.xp + xpFromEffects(effects) }
   for (const effect of effects) {
     if (effect.type === 'stat') {
       const key = effect.target as ClampedStat | undefined
