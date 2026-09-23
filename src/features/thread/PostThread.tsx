@@ -6,6 +6,7 @@ import { Avatar } from '../../components/Avatar'
 import { VerifiedBadge } from '../../components/VerifiedBadge'
 import { ArrowLeftIcon, ChevronRightIcon, HeartIcon, ReplyIcon, RepostIcon } from '../../components/icons'
 import { formatFullTime } from '../../engine/time'
+import { formatCompactNumber } from '../../components/formatCompactNumber'
 import { isNPC } from '../../types'
 import { isViewableProfile } from '../../engine/npcTier'
 import { PLAYER_ID } from '../../store/gameStore'
@@ -155,7 +156,7 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
             </button>
             <span className="flex items-center gap-1.5 rounded-full border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
               <RepostIcon className="h-4 w-4" />
-              {post.reposts}
+              {formatCompactNumber(post.reposts)}
             </span>
             <button
               onClick={handleLike}
@@ -166,7 +167,7 @@ export function PostThread({ postId, onOpenProfile, onBack }: PostThreadProps) {
               }`}
             >
               <HeartIcon className="h-4 w-4" filled={!!post.likedByPlayer} />
-              {post.likes}
+              {formatCompactNumber(post.likes)}
             </button>
           </div>
         </div>

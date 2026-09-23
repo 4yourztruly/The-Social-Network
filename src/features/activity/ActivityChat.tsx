@@ -4,6 +4,7 @@ import { isNPC } from '../../types'
 import { Avatar } from '../../components/Avatar'
 import { ArrowLeftIcon } from '../../components/icons'
 import { formatRelativeTime } from '../../engine/time'
+import { ACTIVITY_TURN_CAP } from '../../engine/activity'
 
 interface ActivityChatProps {
   activityId: string
@@ -213,6 +214,10 @@ export function ActivityChat({ activityId, onBack, onOpenProfile }: ActivityChat
 
       {activity.status === 'active' && (
         <div className="shrink-0 border-t border-neutral-200 dark:border-neutral-800">
+          <p className="px-4 pt-2 text-xs text-neutral-500">
+            {Math.max(0, ACTIVITY_TURN_CAP - activity.turnCount)} turn
+            {Math.max(0, ACTIVITY_TURN_CAP - activity.turnCount) === 1 ? '' : 's'} left
+          </p>
           {!isTyping && activity.pendingChoices.length > 0 && (
             <div className="flex flex-col gap-2 px-4 pt-3">
               {activity.pendingChoices.map((choice, i) => (

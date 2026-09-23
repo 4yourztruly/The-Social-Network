@@ -68,7 +68,7 @@ export default function App() {
     return (
       <div
         className="mx-auto flex w-full max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
-        style={{ height: '100dvh' }}
+        style={{ height: '100svh' }}
       >
         <Onboarding />
       </div>
@@ -151,7 +151,7 @@ export default function App() {
   return (
     <div
       className="relative mx-auto flex w-full max-w-xl overflow-hidden md:max-w-4xl"
-      style={{ height: '100dvh' }}
+      style={{ height: '100svh' }}
     >
       <SidebarNav screen={screen} onNavigate={handleNavigate} />
 

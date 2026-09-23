@@ -133,6 +133,19 @@ export function Profile({ profileId, onOpenProfile, onOpenThread, onOpenDM, onBa
         <p className="text-sm text-neutral-500">@{profile.username}</p>
         <p className="mt-2 text-[15px]">{profile.bio}</p>
 
+        {npc && npc.personality.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {npc.personality.map((trait) => (
+              <span
+                key={trait}
+                className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium capitalize text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
+              >
+                {trait}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="mt-3 text-sm">
           <span className="font-semibold text-neutral-900 dark:text-white">{formatCompactNumber(profile.followers)}</span>{' '}
           <span className="text-neutral-500">Followers</span>{' '}

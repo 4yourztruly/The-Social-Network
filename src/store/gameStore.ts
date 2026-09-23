@@ -59,6 +59,7 @@ import { pushRecentLine, selectLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
 import {
   ACTIVITY_CHOICES,
+  ACTIVITY_TURN_CAP,
   computeRsvp,
   coverageChance,
   pickMediaOutlet,
@@ -80,6 +81,7 @@ import { generateAiComment } from '../ai/commentService'
 import { generateActivityTurn, generateMediaCoverage } from '../ai/activityService'
 import { generateAiEncounter, generateAiEncounterOutcome } from '../ai/eventService'
 import { getProviderConfig, loadProviderConfigs } from '../ai/keyStorage'
+import { GENERIC_OFFTOPIC_REACTION_POOL } from '../content/genericFiller'
 import { canSpend, recordSpend } from '../ai/budget'
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000
@@ -972,6 +974,42 @@ export const useGameStore = create<GameState>((set, get) => {
         postOrder: [reply.id, ...state.postOrder],
       }
     })
+
+    // People reply when replied to — whoever's post this is gets a
+    // guaranteed comment back, reacting to what the player just said (AI
+    // path), or a personality-flavored template line otherwise. Never the
+    // player replying to themselves.
+    const state = get()
+    const parent = state.posts[parentId]
+    const parentAuthor = parent ? state.profiles[parent.authorId] : undefined
+    if (parent && parentAuthor && isNPC(parentAuthor)) {
+      const pack = CAREER_PACKS[state.player.career]
+      const rng = mulberry32(hashStringToSeed(`${parentId}_replyback_${Date.now()}`))
+      const linePool = parentAuthor.offTopic ? GENERIC_OFFTOPIC_REACTION_POOL : pack.reactionPool[parentAuthor.persona]
+      const selection = selectLine(rng, linePool, [], parentAuthor.recentLineIds)
+      const playerProfile = state.profiles[PLAYER_ID] as Profile
+      const filled = fillTemplate(selection.line, {
+        player: playerProfile.displayName,
+        org: state.player.club || pack.worldName,
+      })
+      const fallbackText = applyPersonalityVoice(filled, parentAuthor, rng)
+
+      set((s) => ({
+        profiles: {
+          ...s.profiles,
+          [parentAuthor.id]: { ...parentAuthor, recentLineIds: pushRecentLine(parentAuthor.recentLineIds, selection.lineId) },
+        },
+      }))
+
+      processComments([
+        {
+          id: makeId('sched'),
+          dueAt: Date.now(),
+          kind: 'comment',
+          payload: { parentPostId: parentId, npcId: parentAuthor.id, text: fallbackText, tags: [], aiEligible: true },
+        },
+      ])
+    }
   },
 
   submitPlayerStory: (caption) => {
@@ -1268,7 +1306,6 @@ export const useGameStore = create<GameState>((set, get) => {
   sendActivityChoice: (activityId, text) => {
     const trimmed = text.trim()
     if (!trimmed) return
-    const ACTIVITY_TURN_CAP = 4
 
     set((state) => {
       const activity = state.activities[activityId]

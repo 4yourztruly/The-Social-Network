@@ -8,6 +8,10 @@ import { applyPersonalityVoice } from './voice'
 // rule 1: "gameplay never blocks on AI"). AI narration (activityService.ts)
 // is the richer, opt-in path; this keeps the feature fully playable without it.
 
+// Every activity auto-ends after this many player turns — shared between
+// the store (which enforces it) and the UI (which shows "N turns left").
+export const ACTIVITY_TURN_CAP = 4
+
 // Always-available fallback choices — used whenever AI is off, unconfigured,
 // over budget, or fails to return usable scene-specific options. Deliberately
 // generic (not tied to the scene) since they have to work for any activity.

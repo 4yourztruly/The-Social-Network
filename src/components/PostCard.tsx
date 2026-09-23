@@ -7,6 +7,7 @@ import { HeartIcon, ReplyIcon, RepostIcon, StarIcon } from './icons'
 import { PostText } from './PostText'
 import { isNPC } from '../types'
 import { isViewableProfile } from '../engine/npcTier'
+import { formatCompactNumber } from './formatCompactNumber'
 
 interface PostCardProps {
   postId: string
@@ -124,7 +125,7 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread, onReply }: PostCard
               }`}
             >
               <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
-              {post.likes}
+              {formatCompactNumber(post.likes)}
             </button>
             <span className="text-xs">|</span>
             <button
@@ -144,11 +145,11 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread, onReply }: PostCard
               className="flex cursor-pointer items-center gap-1.5 text-xs hover:text-sky-500"
             >
               <ReplyIcon className="h-[18px] w-[18px]" />
-              {post.replies}
+              {formatCompactNumber(post.replies)}
             </button>
             <span className="flex items-center gap-1.5 text-xs">
               <RepostIcon className="h-[18px] w-[18px]" />
-              {post.reposts}
+              {formatCompactNumber(post.reposts)}
             </span>
             <button
               onClick={handleLikeStopped}
@@ -157,7 +158,7 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread, onReply }: PostCard
               }`}
             >
               <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
-              {post.likes}
+              {formatCompactNumber(post.likes)}
             </button>
             <StarIcon className="ml-auto h-[18px] w-[18px] shrink-0" />
           </div>

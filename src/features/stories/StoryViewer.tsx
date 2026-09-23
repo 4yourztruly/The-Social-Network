@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGameStore, PLAYER_ID } from '../../store/gameStore'
 import { isNPC } from '../../types'
 import { isDmAvailable } from '../../engine/npcTier'
@@ -34,6 +34,12 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
   const [replyText, setReplyText] = useState('')
   const [showComments, setShowComments] = useState(false)
   const [commentText, setCommentText] = useState('')
+  // Press-and-hold pauses the story (progress bar + auto-advance), like
+  // Instagram — a quick tap still navigates, a sustained press just pauses
+  // and resumes on release without jumping anywhere.
+  const [held, setHeld] = useState(false)
+  const pointerDownAtRef = useRef(0)
+  const HOLD_THRESHOLD_MS = 200
 
   const stories = useMemo(() => {
     const now = Date.now()
@@ -88,14 +94,15 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
 
   useEffect(() => {
     // Don't advance out from under a reply/comment the player is mid-typing,
-    // or while they're reading the comments panel — that would silently
-    // redirect their message to whoever's story comes next, or yank the
-    // panel closed under them.
-    if (!story || replyText.length > 0 || showComments) return
+    // while they're reading the comments panel, or while they're pressing
+    // and holding — any of those would silently redirect their message to
+    // whoever's story comes next, yank a panel closed, or skip a story they
+    // were still reading.
+    if (!story || replyText.length > 0 || showComments || held) return
     const timer = setTimeout(goNext, STORY_DURATION_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorId, storyIndex, story, replyText.length > 0, showComments])
+  }, [authorId, storyIndex, story, replyText.length > 0, showComments, held])
 
   const handleReply = () => {
     if (!replyText.trim() || authorId === PLAYER_ID) return
@@ -107,6 +114,19 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
     if (!commentText.trim() || !story) return
     addPlayerReply(story.id, commentText)
     setCommentText('')
+  }
+
+  const handlePointerDown = () => {
+    pointerDownAtRef.current = Date.now()
+    setHeld(true)
+  }
+  const handlePointerUp = () => setHeld(false)
+  const wasQuickTap = () => Date.now() - pointerDownAtRef.current < HOLD_THRESHOLD_MS
+  const handleTapPrev = () => {
+    if (wasQuickTap()) goPrev()
+  }
+  const handleTapNext = () => {
+    if (wasQuickTap()) goNext()
   }
 
   if (!author || !story) return null
@@ -130,7 +150,11 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
                   i < storyIndex
                     ? { width: '100%' }
                     : i === storyIndex
-                      ? { width: '100%', animation: `story-progress ${STORY_DURATION_MS}ms linear forwards` }
+                      ? {
+                          width: '100%',
+                          animation: `story-progress ${STORY_DURATION_MS}ms linear forwards`,
+                          animationPlayState: held ? 'paused' : 'running',
+                        }
                       : { width: '0%' }
                 }
               />
@@ -160,8 +184,26 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
         </div>
 
         <div className="relative flex flex-1 items-center justify-center px-8">
-          <button aria-label="Previous" onClick={goPrev} className="absolute inset-y-0 left-0 w-1/3" />
-          <button aria-label="Next" onClick={goNext} className="absolute inset-y-0 right-0 w-1/3" />
+          <button
+            aria-label="Previous"
+            onPointerDown={handlePointerDown}
+            onPointerUp={() => {
+              handlePointerUp()
+              handleTapPrev()
+            }}
+            onPointerLeave={handlePointerUp}
+            className="absolute inset-y-0 left-0 w-1/3"
+          />
+          <button
+            aria-label="Next"
+            onPointerDown={handlePointerDown}
+            onPointerUp={() => {
+              handlePointerUp()
+              handleTapNext()
+            }}
+            onPointerLeave={handlePointerUp}
+            className="absolute inset-y-0 right-0 w-1/3"
+          />
           <p className="text-center text-2xl font-semibold leading-snug drop-shadow">{story.text}</p>
         </div>
 
