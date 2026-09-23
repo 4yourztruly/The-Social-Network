@@ -89,21 +89,37 @@ export default function App() {
   // navigation in the app funnels through this one handler, so gating it
   // here is enough — no need to also disable the click affordance in every
   // individual component that renders an author name/avatar.
+  // Unmounting a screen while one of its inputs still has focus (e.g.
+  // Compose's caption box, autoFocused) leaves an iOS WKWebView's on-screen
+  // keyboard mid-dismiss with nothing left to blur — the visual viewport
+  // that `dvh` tracks can get stuck at the keyboard-open (shrunk) size
+  // instead of recalculating back to full height, leaving the bottom nav
+  // stranded a keyboard's-height above the true bottom edge. Blurring
+  // explicitly, before the screen swap, gives the keyboard a normal close
+  // animation to finish against instead of vanishing out from under it.
+  const blurActiveElement = () => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement) active.blur()
+  }
+
   const handleOpenProfile = (profileId: string) => {
     const target = profiles[profileId]
     if (target && isNPC(target) && !isViewableProfile(target)) return
+    blurActiveElement()
     setViewingPostId(null)
     setViewingDmNpcId(null)
     setShowPeople(false)
     setViewingProfileId(profileId)
   }
   const handleOpenThread = (postId: string) => {
+    blurActiveElement()
     setViewingProfileId(null)
     setViewingDmNpcId(null)
     setShowPeople(false)
     setViewingPostId(postId)
   }
   const handleOpenDM = (npcId: string) => {
+    blurActiveElement()
     setViewingProfileId(null)
     setViewingPostId(null)
     setShowPeople(false)
@@ -113,6 +129,7 @@ export default function App() {
     setViewedStoryAuthorIds((prev) => (prev.has(authorId) ? prev : new Set(prev).add(authorId)))
 
   const handleNavigate = (next: Screen) => {
+    blurActiveElement()
     setViewingProfileId(null)
     setViewingPostId(null)
     setViewingDmNpcId(null)
@@ -122,19 +139,25 @@ export default function App() {
   }
 
   const handlePosted = () => {
+    blurActiveElement()
     setScreen('feed')
+  }
+
+  const handleBack = (dismiss: () => void) => () => {
+    blurActiveElement()
+    dismiss()
   }
 
   let overlay: React.ReactNode = null
   if (showSettings) {
-    overlay = <Settings onBack={() => setShowSettings(false)} />
+    overlay = <Settings onBack={handleBack(() => setShowSettings(false))} />
   } else if (viewingDmNpcId !== null) {
     overlay = (
-      <DMThread npcId={viewingDmNpcId} onOpenProfile={handleOpenProfile} onBack={() => setViewingDmNpcId(null)} />
+      <DMThread npcId={viewingDmNpcId} onOpenProfile={handleOpenProfile} onBack={handleBack(() => setViewingDmNpcId(null))} />
     )
   } else if (viewingPostId !== null) {
     overlay = (
-      <PostThread postId={viewingPostId} onOpenProfile={handleOpenProfile} onBack={() => setViewingPostId(null)} />
+      <PostThread postId={viewingPostId} onOpenProfile={handleOpenProfile} onBack={handleBack(() => setViewingPostId(null))} />
     )
   } else if (viewingProfileId !== null) {
     overlay = (
@@ -143,12 +166,12 @@ export default function App() {
         onOpenProfile={handleOpenProfile}
         onOpenThread={handleOpenThread}
         onOpenDM={handleOpenDM}
-        onBack={() => setViewingProfileId(null)}
+        onBack={handleBack(() => setViewingProfileId(null))}
         onOpenSettings={() => setShowSettings(true)}
       />
     )
   } else if (showPeople) {
-    overlay = <People onOpenProfile={handleOpenProfile} onOpenDM={handleOpenDM} onBack={() => setShowPeople(false)} />
+    overlay = <People onOpenProfile={handleOpenProfile} onOpenDM={handleOpenDM} onBack={handleBack(() => setShowPeople(false))} />
   }
 
   return (
@@ -171,7 +194,7 @@ export default function App() {
             viewedAuthorIds={viewedStoryAuthorIds}
             onMarkViewed={handleMarkStoryViewed}
             onChangeAuthor={setViewingStoryAuthorId}
-            onClose={() => setViewingStoryAuthorId(null)}
+            onClose={handleBack(() => setViewingStoryAuthorId(null))}
             onOpenProfile={(id) => {
               setViewingStoryAuthorId(null)
               handleOpenProfile(id)
@@ -179,7 +202,7 @@ export default function App() {
           />
         )}
         {showAddStory && (
-          <AddStory onBack={() => setShowAddStory(false)} onPosted={() => setShowAddStory(false)} />
+          <AddStory onBack={handleBack(() => setShowAddStory(false))} onPosted={handleBack(() => setShowAddStory(false))} />
         )}
 
         {!overlay && screen === 'feed' && <EventButton />}
