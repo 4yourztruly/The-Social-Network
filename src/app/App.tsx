@@ -68,16 +68,8 @@ export default function App() {
   if (!onboarded) {
     return (
       <div
-        className="fixed inset-x-0 top-0 mx-auto flex max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+        className="fixed inset-0 mx-auto flex max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
         style={{
-          // A raw `bottom: 0` on a fixed element was confirmed (via an
-          // on-device test with a marker pinned to literal bottom:0) to
-          // land at the SAFE-AREA boundary here, not the true physical
-          // screen edge, despite viewport-fit=cover — so `bottom: 0` alone
-          // leaves a gap the size of the home indicator's safe area below
-          // everything. Pushing past it by that same amount lands exactly
-          // on the true edge instead.
-          bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))',
           paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
@@ -186,10 +178,7 @@ export default function App() {
       {/* TEMPORARY diagnostic overlay — real numbers instead of guessing
           from colored bars. Remove once we know what's actually happening. */}
       <DiagnosticOverlay />
-      <div
-        className="fixed inset-x-0 top-0 mx-auto flex max-w-xl overflow-hidden md:max-w-4xl"
-        style={{ bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }}
-      >
+      <div className="fixed inset-0 mx-auto flex max-w-xl overflow-hidden md:max-w-4xl">
         <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
       <div
@@ -291,7 +280,11 @@ function DiagnosticOverlay() {
       const probeRect = probeRef.current?.getBoundingClientRect()
       const style = probeRef.current ? getComputedStyle(probeRef.current) : null
       const gapBelowProbe = probeRect ? window.innerHeight - probeRect.bottom : NaN
+      const navEl = document.querySelectorAll('nav')[document.querySelectorAll('nav').length - 1]
+      const navRect = navEl?.getBoundingClientRect()
+      const gapBelowNav = navRect ? window.innerHeight - navRect.bottom : NaN
       setInfo([
+        `BUILD: v3-plain-inset0-revert`,
         `innerHeight: ${window.innerHeight}`,
         `visualViewport.height: ${window.visualViewport?.height ?? 'n/a'}`,
         `visualViewport.offsetTop: ${window.visualViewport?.offsetTop ?? 'n/a'}`,
@@ -301,6 +294,8 @@ function DiagnosticOverlay() {
         `env(safe-area-inset-top) computed: ${style?.paddingTop ?? 'n/a'}`,
         `probe bottom:0 rect.bottom: ${probeRect?.bottom ?? 'n/a'}`,
         `gap below probe (should be 0): ${gapBelowProbe}`,
+        `REAL NAV rect.bottom: ${navRect?.bottom ?? 'n/a'}`,
+        `gap below REAL NAV (should be 0): ${gapBelowNav}`,
         `display-mode standalone: ${window.matchMedia('(display-mode: standalone)').matches}`,
       ])
     }
