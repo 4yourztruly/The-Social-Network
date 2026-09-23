@@ -7,15 +7,13 @@ interface BottomNavProps {
   onNavigate: (screen: Screen) => void
 }
 
-// Deliberately a plain in-flow flex child of the app shell (NOT
-// position:fixed) — iOS WKWebView has a well-known bug where a fixed
-// element can visually detach and freeze in place after a nested
-// overflow-y-auto pane (Compose, PostThread, Profile, ...) is scrolled and
-// then navigated away from mid-scroll. The shell itself never scrolls
-// (html/body/#root are overflow:hidden — see index.css), so as long as the
-// shell's own height (the app-shell class + useViewportHeight, see
-// index.css/App.tsx) stays correct, this being the shell's last flex child
-// is enough to keep it pinned to the true bottom edge.
+// A plain in-flow flex child of the app shell, not position:fixed itself —
+// the SHELL (App.tsx's root) is the one pinned with `fixed inset-0` to the
+// physical screen edges, immune to every iOS keyboard/viewport-unit quirk
+// (several attempts at chasing `vh`/`svh`/`dvh` with JS all preceded this
+// and all still left the nav stuck after the keyboard closed). Once the
+// shell itself can't be the wrong size, being its last flex child is all
+// this needs to always render flush with the true bottom edge.
 export function BottomNav({ screen, onNavigate }: BottomNavProps) {
   return (
     <nav

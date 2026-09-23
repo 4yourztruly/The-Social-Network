@@ -14,33 +14,18 @@ html,
 body,
 #root {
   height: 100%;
-  /* The app is a fixed-height shell (App.tsx's 100svh root) with its own
-     internal `overflow-y-auto` panes doing all the real scrolling (Feed,
-     Profile, DMThread, ...). Without this, html/body's own box can still
-     grow taller than the viewport (e.g. a focused input nudging layout, or
-     100% vs 100svh rounding) and become scrollable themselves — which reads
-     as the *entire app*, bottom nav included, scrolling/dragging around
-     instead of just the one pane that's supposed to move. */
+  /* The app's own root (App.tsx) is `position: fixed; inset: 0` — pinned
+     directly to the physical screen's edges, not sized off html/body/#root
+     at all, so it's immune to every iOS viewport-unit quirk (`vh`/`svh`/
+     `dvh` all misbehave in various ways with the on-screen keyboard and
+     standalone-PWA mode — three earlier attempts at chasing those, all
+     replaced by this). This overflow:hidden is just a defensive backstop
+     so html/body itself never becomes independently scrollable/draggable
+     underneath the fixed app. */
   overflow: hidden;
 }
 
 html {
-  /* Three-layer fallback, weakest first so each later line only applies
-     where the browser understands it (plain CSS cascade, not "smallest
-     wins"): `100%` is dropped in favor of `100svh` everywhere that
-     understands it, which is dropped in favor of `100dvh` everywhere that
-     understands THAT. `100dvh` (dynamic viewport height) is the unit built
-     specifically to track the real, current visible viewport — but iOS's
-     standalone (Home Screen) WKWebView has been observed not to always
-     recompute it when the on-screen keyboard closes via its own native
-     "Done" button. `--app-height` (see useViewportHeight.ts) is a JS
-     measurement of the same thing via the visualViewport API, which DOES
-     reliably fire for that case; it wins last, when set, via `var()`'s
-     fallback syntax — everything above it is only what renders before that
-     effect runs, or on a browser where it's unavailable. */
-  height: 100svh;
-  height: 100dvh;
-  height: var(--app-height, 100dvh);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -49,19 +34,6 @@ body {
   margin: 0;
   background-color: var(--color-white);
   overscroll-behavior: none;
-}
-
-/* The app's fixed-height root shell (both the pre-onboarding screen and the
-   main authenticated shell in App.tsx) — same fallback chain as `html`
-   above, and for the same reason. Only a CSS class (not an inline style)
-   can do this progressive-override trick: an inline `style` object can
-   hold one value per property, so `dvh`/`var()` there would just be
-   dropped outright by a browser that doesn't parse it, leaving `height`
-   unset. */
-.app-shell {
-  height: 100svh;
-  height: 100dvh;
-  height: var(--app-height, 100dvh);
 }
 
 .dark body {

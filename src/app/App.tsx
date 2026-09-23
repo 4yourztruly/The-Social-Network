@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useTheme } from './useTheme'
 import { usePersistence } from './usePersistence'
 import { useSchedulerTick } from './useSchedulerTick'
-import { useViewportHeight } from './useViewportHeight'
 import { BottomNav, type Screen } from './BottomNav'
 import { SidebarNav } from './SidebarNav'
 import { Feed } from '../features/feed/Feed'
@@ -31,7 +30,6 @@ export default function App() {
   useTheme()
   usePersistence()
   useSchedulerTick()
-  useViewportHeight()
 
   const onboarded = useGameStore((s) => s.onboarded)
   const dayNumber = useGameStore((s) => s.gameDay)
@@ -70,7 +68,7 @@ export default function App() {
   if (!onboarded) {
     return (
       <div
-        className="app-shell mx-auto flex w-full max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+        className="fixed inset-0 mx-auto flex max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
         style={{
           paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
@@ -93,12 +91,11 @@ export default function App() {
   // individual component that renders an author name/avatar.
   // Unmounting a screen while one of its inputs still has focus (e.g.
   // Compose's caption box, autoFocused) leaves an iOS WKWebView's on-screen
-  // keyboard mid-dismiss with nothing left to blur — the visual viewport
-  // that `dvh` tracks can get stuck at the keyboard-open (shrunk) size
-  // instead of recalculating back to full height, leaving the bottom nav
-  // stranded a keyboard's-height above the true bottom edge. Blurring
-  // explicitly, before the screen swap, gives the keyboard a normal close
-  // animation to finish against instead of vanishing out from under it.
+  // keyboard mid-dismiss with nothing left to blur, which can visibly glitch
+  // its close animation. Blurring explicitly, before the screen swap, gives
+  // it a normal close to finish against instead of vanishing out from
+  // under it. (The bottom nav itself no longer depends on any of this —
+  // see the shell's `fixed inset-0` below.)
   const blurActiveElement = () => {
     const active = document.activeElement
     if (active instanceof HTMLElement) active.blur()
@@ -177,7 +174,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell relative mx-auto flex w-full max-w-xl overflow-hidden md:max-w-4xl">
+    <div className="fixed inset-0 mx-auto flex max-w-xl overflow-hidden md:max-w-4xl">
       <SidebarNav screen={screen} onNavigate={handleNavigate} />
 
       <div
