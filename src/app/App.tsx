@@ -69,7 +69,7 @@ export default function App() {
     return (
       <div
         className="mx-auto flex w-full max-w-xl flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
-        style={{ height: '100svh' }}
+        style={{ height: '100svh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <Onboarding />
       </div>
