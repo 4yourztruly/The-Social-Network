@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { AIProviderConfig } from '../types'
 import { createOpenAICompatibleProvider, AIRequestError } from './openaiCompatible'
 import { fetchWikipediaThumbnail } from '../engine/avatarSource'
+import { fetchWikipediaFacts } from '../engine/wikiFacts'
 
 const REQUEST_TIMEOUT_MS = 15_000
 
@@ -38,8 +39,10 @@ function buildSystemPrompt(): string {
   ].join('\n')
 }
 
-function buildUserPrompt(name: string, description: string): string {
-  return `Name: ${name}\n${description ? `Extra context from the player: "${description}"` : ''}\n\nGenerate the JSON object now.`
+function buildUserPrompt(name: string, description: string, facts?: string | null): string {
+  const hint = description ? `Extra context from the player: "${description}"\n` : ''
+  const verified = facts ? `Verified facts (from Wikipedia — base the bio and personality on these, they override your own memory): ${facts}\n` : ''
+  return `Name: ${name}\n${hint}${verified}\nGenerate the JSON object now.`
 }
 
 function extractJsonObject(text: string): unknown {
@@ -59,10 +62,11 @@ export async function generatePersonDetails(args: GeneratePersonDetailsArgs): Pr
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
+    const facts = await fetchWikipediaFacts(name)
     const [text, avatarUrl] = await Promise.all([
       provider.complete({
         system: buildSystemPrompt(),
-        user: buildUserPrompt(name, description),
+        user: buildUserPrompt(name, description, facts),
         maxTokens: 400,
         signal: controller.signal,
       }),

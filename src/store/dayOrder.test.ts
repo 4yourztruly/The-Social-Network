@@ -30,3 +30,32 @@ describe('day ordering and story comments', () => {
     expect(new Set(sections).size).toBe(sections.length)
   })
 })
+
+describe('feed volume', () => {
+  it('a day brings at most a few news-outlet posts and busy days are the reason for more', async () => {
+    await useGameStore.getState().completeOnboarding({
+      career: 'footballer', displayName: 'Test', username: 'test', bio: 'Forward.', role: '', org: '', celebs: [{ name: 'Zendaya' }],
+    })
+    const before = new Set(Object.keys(useGameStore.getState().posts))
+    useGameStore.getState().submitPlayerPost({ caption: 'quiet day' })
+    const s = useGameStore.getState()
+    const fresh = Object.values(s.posts).filter((p) => !before.has(p.id) && p.kind === 'post')
+    const media = fresh.filter((p) => {
+      const a = s.profiles[p.authorId]
+      return a && isNPC(a) && (a.persona === 'match_reporter' || a.persona === 'tabloid')
+    })
+    expect(media.length).toBeLessThanOrEqual(3)
+  })
+
+  it('every day-batch post gets a real comment section', async () => {
+    await useGameStore.getState().completeOnboarding({
+      career: 'footballer', displayName: 'Test', username: 'test', bio: 'Forward.', role: '', org: '', celebs: [{ name: 'Zendaya' }],
+    })
+    const before = new Set(Object.keys(useGameStore.getState().posts))
+    useGameStore.getState().submitPlayerPost({ caption: 'hello world' })
+    const s = useGameStore.getState()
+    const fresh = Object.values(s.posts).filter((p) => !before.has(p.id) && p.kind === 'post' && p.authorId !== 'player')
+    const withComments = fresh.filter((p) => Object.values(s.posts).filter((r) => r.parentId === p.id).length >= 4)
+    expect(withComments.length).toBeGreaterThan(0)
+  })
+})

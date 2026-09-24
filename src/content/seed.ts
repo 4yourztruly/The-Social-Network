@@ -40,6 +40,18 @@ function isFeedPoster(npc: NPC): boolean {
   return isGenericPoster(npc) && tierForPersona(npc.persona) !== 'commenter'
 }
 
+// News outlets are two accounts among many — left alone they'd flood the feed.
+// Past `cap` posts, another author takes the slot.
+function pickCappedAuthor(rng: RNG, all: NPC[], mediaUsed: { n: number }, cap: number): NPC {
+  let author = pick(rng, all)
+  if (tierForPersona(author.persona) === 'media' && mediaUsed.n >= cap) {
+    const others = all.filter((n) => tierForPersona(n.persona) !== 'media')
+    if (others.length > 0) author = pick(rng, others)
+  }
+  if (tierForPersona(author.persona) === 'media') mediaUsed.n++
+  return author
+}
+
 const MENTION_POST_LINES = [
   '@{player} you around? big fan honestly',
   '@{player} whatever you post next I am here for it',
@@ -198,8 +210,9 @@ function seedPosts(
   // like everyone else.
   const npcList = Object.values(npcs).filter(isFeedPoster)
   const posts: Post[] = []
+  const mediaUsed = { n: 0 }
   for (let i = 0; i < count && npcList.length > 0; i++) {
-    const author = pick(rng, npcList)
+    const author = pickCappedAuthor(rng, npcList, mediaUsed, 3)
     const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
     // Anti-repetition, same as replies/live comments — without this the
@@ -219,7 +232,7 @@ function seedPosts(
       createdAt: now - ageMs,
       likes: engagement.likes,
       reposts: engagement.reposts,
-      replies: randomInt(rng, 0, 20),
+      replies: tierForPersona(author.persona) === 'media' ? randomInt(rng, 4, 10) : randomInt(rng, 6, 16),
       origin: 'template',
     })
   }
@@ -236,12 +249,16 @@ export function seedDailyPosts(
   count: number,
   orgForFlavor: string,
   playerUsername?: string,
+  // How many of the day's posts may come from the news outlets. Usually 1;
+  // more only when a lot is going on (see gameStore.advanceDay).
+  mediaCap = 1,
 ): Post[] {
   const now = Date.now()
   const npcList = Object.values(npcs).filter(isFeedPoster)
   const posts: Post[] = []
+  const mediaUsed = { n: 0 }
   for (let i = 0; i < count && npcList.length > 0; i++) {
-    const author = pick(rng, npcList)
+    const author = pickCappedAuthor(rng, npcList, mediaUsed, mediaCap)
     const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
     const selection = selectPlainLine(rng, lines, author.recentLineIds)
@@ -261,7 +278,7 @@ export function seedDailyPosts(
       createdAt: now - ageMs,
       likes: engagement.likes,
       reposts: engagement.reposts,
-      replies: randomInt(rng, 0, 15),
+      replies: tierForPersona(author.persona) === 'media' ? randomInt(rng, 4, 10) : randomInt(rng, 8, 15),
       origin: 'template',
     })
   }

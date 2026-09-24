@@ -1,6 +1,7 @@
 import type { AIProviderConfig, DMMessage, NPC } from '../types'
 import { createOpenAICompatibleProvider, AIRequestError } from './openaiCompatible'
 import { relationshipDescriptor, sanitizeAiText } from './shared'
+import { npcDossier } from '../engine/npcMemory'
 
 const MAX_HISTORY = 10
 const REQUEST_TIMEOUT_MS = 12_000
@@ -25,6 +26,7 @@ export function buildDmSystemPrompt(npc: NPC, playerDisplayName: string, orgName
       ? "If their bio describes a real person unrelated to football (an actor, musician, athlete in another sport, etc.), talk like THAT person would — their real vocation, interests and voice — not like a footballer or football-world insider. Only lean into football-world framing if their bio actually puts them in that world."
       : '',
     `Your relationship with the player (${playerDisplayName}, of ${orgName}) is: ${relationshipDescriptor(npc.relationship)}.`,
+    npcDossier(npc),
     npc.mood < 0 ? "You're in a bad mood right now." : npc.mood > 2 ? "You're in a great mood right now." : '',
     'Reply as a short, casual DM — 1 to 2 sentences, texting style, no more than 240 characters.',
     'Stay fully in character at all times. Never mention being an AI, a model, or a game character.',

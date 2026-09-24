@@ -72,6 +72,23 @@ export interface NPC extends Profile {
   // celebrity never gets stuck talking like a footballer when AI isn't
   // available for a given line (over budget, network failure, etc).
   offTopic?: boolean
+  // What the real person is publicly known for, looked up from Wikipedia
+  // (see engine/wikiFacts.ts) — their shows, films, music, sport. Lets the AI
+  // (and the game) know e.g. that an actress stars in a particular series.
+  knowledge?: string
+  // Set once a lookup has been attempted, so an invented name or a failed
+  // request isn't retried on every load.
+  knowledgeChecked?: boolean
+}
+
+// Something that happened in the world that the tabloids ran — about the
+// player or about other celebs. Remembered so DMs, comments and activities
+// can refer back to it consistently.
+export interface WorldStory {
+  id: string
+  day: number
+  text: string
+  people: string[] // profile ids involved (NPCs, sometimes the player)
 }
 
 export type PostOrigin = 'template' | 'ai' | 'player'
@@ -305,6 +322,7 @@ export interface SaveGame {
   worldSettings: WorldSettings
   achievements: string[] // unlocked achievement ids
   mutedAccounts: string[] // profile ids muted by the player (stories, media posts)
+  worldStories?: WorldStory[] // what the tabloids have run — see WorldStory
   activities: Record<string, Activity>
   onboarded: boolean // has the player completed career/profile creation?
 }

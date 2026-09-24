@@ -24,6 +24,11 @@ export interface GossipSubject {
   // up, people @-tagged in the post) — display names.
   others: readonly string[]
   // How an event landed, and what the player actually did about it.
+  // Gossip about celebs in their own lives, nothing to do with the player:
+  // `playerName` is then the celeb the story is about (see store's
+  // runWorldGossip) and their own posts get the reactions.
+  world?: boolean
+  subjectNpcId?: string
   eventTier?: 'good' | 'neutral' | 'bad'
   eventMove?: string
 }

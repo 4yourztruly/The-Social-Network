@@ -1,6 +1,7 @@
 import type { ActivityMessage, AIProviderConfig, NPC } from '../types'
 import { createOpenAICompatibleProvider, AIRequestError } from './openaiCompatible'
 import { relationshipDescriptor, sanitizeAiText } from './shared'
+import { npcDossier } from '../engine/npcMemory'
 
 const REQUEST_TIMEOUT_MS = 12_000
 const MAX_BEAT_CHARS = 320
@@ -24,7 +25,7 @@ export function buildActivitySystemPrompt(
     .map((npc) => {
       const traits = npc.personality.length > 0 ? npc.personality.join(', ') : 'even-tempered'
       const who = npc.bio ? `who they actually are: "${npc.bio}"` : `game-mechanic label: ${npc.persona.replace('_', ' ')}`
-      return `- ${npc.displayName} (@${npc.username}): ${who}; traits ${traits}; relationship with ${playerDisplayName} is ${relationshipDescriptor(npc.relationship)} (vibe: ${npc.vibe.replace('_', ' ')}).`
+      return `- ${npc.displayName} (@${npc.username}): ${who}; traits ${traits}; relationship with ${playerDisplayName} is ${relationshipDescriptor(npc.relationship)} (vibe: ${npc.vibe.replace('_', ' ')}).${npcDossier(npc) ? `\n${npcDossier(npc)}` : ''}`
     })
     .join('\n')
 

@@ -55,6 +55,9 @@ const npcSchema = z.object({
   dialogueState: z.string().optional(),
   followedByPlayer: z.boolean(),
   custom: z.boolean().optional(),
+  offTopic: z.boolean().optional(),
+  knowledge: z.string().optional(),
+  knowledgeChecked: z.boolean().optional(),
   lastRelationshipChange: z
     .object({ delta: z.number(), reason: z.string(), at: z.number() })
     .optional(),
@@ -198,6 +201,9 @@ export const saveGameSchema = z.object({
   worldSettings: worldSettingsSchema,
   achievements: z.array(z.string()),
   mutedAccounts: z.array(z.string()),
+  worldStories: z
+    .array(z.object({ id: z.string(), day: z.number(), text: z.string(), people: z.array(z.string()) }))
+    .optional(),
   activities: z.record(z.string(), activitySchema),
   onboarded: z.boolean(),
 })

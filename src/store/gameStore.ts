@@ -39,6 +39,9 @@ import { buildCelebSeeds } from '../ai/celebSeedService'
 import { buildFixedMediaSeeds } from '../content/universe'
 import { generateAiSeedPost } from '../ai/seedContentService'
 import { isNPC } from '../types'
+import type { WorldStory } from '../types'
+import { fetchWikipediaFacts } from '../engine/wikiFacts'
+import { registerMemorySource } from '../engine/npcMemory'
 import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
 import { createGameEvent } from '../engine/events'
@@ -172,6 +175,7 @@ export interface GameState {
   worldSettings: WorldSettings
   achievements: string[]
   mutedAccounts: string[]
+  worldStories: WorldStory[]
   activities: Record<string, Activity>
   activeEncounter: RandomEncounter | null
   onboarded: boolean
@@ -295,11 +299,33 @@ export const useGameStore = create<GameState>((set, get) => {
     return config && canSpend(config.id, config.rpdBudget) ? config : undefined
   }
 
-  const AI_COMMENTS_PER_PARENT = 3
+  registerMemorySource(() => {
+    const st = get()
+    return {
+      playerName: (st.profiles[PLAYER_ID] as Profile).displayName,
+      activities: st.activities,
+      threads: st.threads,
+      posts: st.posts,
+      profiles: st.profiles,
+      worldStories: st.worldStories,
+    }
+  })
 
-  // Fills posts/stories with AI-written comments in as few requests as
-  // possible (one per ~24 comments). Returns false when AI wasn't available
-  // or the call failed outright, so the caller can fall back to templates.
+  const MAX_THREAD_DEPTH = 2
+
+  interface PlannedComment {
+    parent: Post
+    npc: NPC
+    // Index in the plan of the comment this one answers, if any.
+    replyTo?: number
+  }
+
+  // Fills posts/stories with AI-written comment threads — top-level
+  // comments plus replies and replies-to-replies — in as few requests as
+  // possible (one per ~40 comments; a whole thread always lands in one
+  // request). `countFor` is the total comments a post should get. Returns
+  // false when AI wasn't available or the call failed outright, so the
+  // caller can fall back to templates.
   async function aiPopulateComments(parents: Post[], countFor: (p: Post) => number): Promise<boolean> {
     const config = aiConfigNow()
     if (!config || parents.length === 0) return false
@@ -309,29 +335,47 @@ export const useGameStore = create<GameState>((set, get) => {
       .filter((n) => tierForPersona(n.persona) !== 'media')
     if (pool.length === 0) return false
     const rng = mulberry32(hashStringToSeed(`aicomments_${state.clock}_${parents.length}_${Date.now()}`))
-    const plan: { parent: Post; npc: NPC }[] = []
+
+    const plan: PlannedComment[] = []
+    const chunkStarts: number[] = []
     for (const parent of parents) {
-      const n = Math.min(countFor(parent), AI_COMMENTS_PER_PARENT)
-      const chosen = pool
-        .filter((c) => c.id !== parent.authorId)
-        .sort(() => rng() - 0.5)
-        .slice(0, n)
-      for (const npc of chosen) plan.push({ parent, npc })
+      const eligible = pool.filter((c) => c.id !== parent.authorId).sort(() => rng() - 0.5)
+      if (eligible.length === 0) continue
+      const n = Math.max(1, countFor(parent))
+      const base = plan.length
+      if (plan.length - (chunkStarts.at(-1) ?? 0) + n > MAX_BATCH_ITEMS || chunkStarts.length === 0) chunkStarts.push(base)
+      const depths: number[] = []
+      for (let k = 0; k < n; k++) {
+        let replyTo: number | undefined
+        if (k >= 2 && rng() < 0.45) {
+          const candidates = depths.map((d, i) => ({ d, i })).filter((c) => c.d < MAX_THREAD_DEPTH)
+          if (candidates.length > 0) replyTo = base + pick(rng, candidates).i
+        }
+        let npc = eligible[k % eligible.length]
+        // Never answer yourself.
+        if (replyTo !== undefined && plan[replyTo].npc.id === npc.id) npc = eligible[(k + 1) % eligible.length]
+        depths.push(replyTo === undefined ? 0 : depths[replyTo - base] + 1)
+        plan.push({ parent, npc, replyTo })
+      }
     }
     if (plan.length === 0) return false
 
     const playerProfile = state.profiles[PLAYER_ID] as Profile
     const pack = CAREER_PACKS[state.player.career]
+    const ids: (string | undefined)[] = new Array(plan.length)
     let anySucceeded = false
-    for (let start = 0; start < plan.length; start += MAX_BATCH_ITEMS) {
-      const chunk = plan.slice(start, start + MAX_BATCH_ITEMS)
+    for (let c = 0; c < chunkStarts.length; c++) {
+      const start = chunkStarts[c]
+      const end = chunkStarts[c + 1] ?? plan.length
+      const chunk = plan.slice(start, end)
       const texts = await generateAiCommentBatch({
-        items: chunk.map(({ parent, npc }) => ({
+        items: chunk.map(({ parent, npc, replyTo }) => ({
           npc,
           targetText: parent.text,
           targetAuthorName: get().profiles[parent.authorId]?.displayName ?? 'someone',
           targetIsPlayer: parent.authorId === PLAYER_ID,
           targetIsReply: false,
+          parentItem: replyTo === undefined ? undefined : replyTo - start,
         })),
         playerDisplayName: playerProfile.displayName,
         orgName: state.player.club || pack.worldName,
@@ -341,32 +385,42 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!texts) continue
       anySucceeded = true
       recordSpend(config.id)
+
       const replies: Post[] = []
-      texts.forEach((text, i) => {
-        const { parent, npc } = chunk[i]
+      const bump = new Map<string, number>()
+      for (let i = 0; i < chunk.length; i++) {
+        const text = texts.get(i)
+        if (!text) continue
+        const { parent, npc, replyTo } = chunk[i]
+        const parentCommentId = replyTo !== undefined ? ids[replyTo] : undefined
+        const parentComment = parentCommentId ? replies.find((r) => r.id === parentCommentId) : undefined
         const id = makeId('post')
+        ids[start + i] = id
         const engagement = estimateReplyEngagement(mulberry32(hashStringToSeed(`${id}_engagement`)), npc.followers, NPC_SOCIAL_SCORE)
+        const mention = parentComment ? state.profiles[parentComment.authorId]?.username : undefined
         replies.push({
           id,
           authorId: npc.id,
           kind: 'reply',
-          parentId: parent.id,
-          text,
+          parentId: parentComment ? parentComment.id : parent.id,
+          text: mention && !text.trim().startsWith('@') ? `@${mention} ${text}` : text,
           tags: [],
-          createdAt: Math.min(Date.now(), parent.createdAt + randomInt(rng, 1, 120) * 60 * 1000),
+          createdAt: Math.min(
+            Date.now(),
+            (parentComment?.createdAt ?? parent.createdAt) + randomInt(rng, 1, 90) * 60 * 1000,
+          ),
           likes: engagement.likes,
           reposts: engagement.reposts,
           replies: 0,
           origin: 'ai',
         })
-      })
+        bump.set(parent.id, (bump.get(parent.id) ?? 0) + 1)
+        if (parentComment) bump.set(parentComment.id, (bump.get(parentComment.id) ?? 0) + 1)
+      }
       set((st) => {
         const posts = { ...st.posts }
-        for (const r of replies) {
-          posts[r.id] = r
-          const p = posts[r.parentId as string]
-          if (p) posts[p.id] = { ...p, replies: p.replies + 1 }
-        }
+        for (const r of replies) posts[r.id] = r
+        for (const [pid, n] of bump) if (posts[pid]) posts[pid] = { ...posts[pid], replies: posts[pid].replies + n }
         return { posts, postOrder: [...replies.map((r) => r.id), ...st.postOrder] }
       })
     }
@@ -425,7 +479,7 @@ export const useGameStore = create<GameState>((set, get) => {
       for (const p of finalPosts) posts[p.id] = p
       return { posts, postOrder: [...finalPosts.map((p) => p.id), ...st.postOrder] }
     })
-    const ok = await aiPopulateComments(finalPosts, (p) => Math.ceil((hold.replyCounts[p.id] ?? 0) / 4))
+    const ok = await aiPopulateComments(finalPosts, (p) => hold.replyCounts[p.id] ?? 8)
     if (!ok) addTemplateReplies(finalPosts, hold.replyCounts)
   }
 
@@ -440,7 +494,11 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       const rng = mulberry32(hashStringToSeed(`day_${state.gameDay}_${state.clock}_${Object.keys(state.posts).length}`))
       const orgForFlavor = state.player.club || pack.worldName
-      const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor, state.profiles[PLAYER_ID]?.username)
+      // Usually a single post from the news outlets — more only when a lot
+      // is going on: the last thing you did was an event, or it made news.
+      const busy =
+        (state.activityLog.at(-1)?.eventId ? 1 : 0) + ((state.lastOutcomeReport?.details?.signals.length ?? 0) > 0 ? 1 : 0)
+      const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor, state.profiles[PLAYER_ID]?.username, 1 + busy)
       const nextGameDay = state.gameDay + 1
       if (aiOn) {
         // No canned posts/comments in AI mode — finishAiDay adds the AI's.
@@ -467,7 +525,75 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     })
     celebOutreach()
+    runWorldGossip()
     if (hold.day) void finishAiDay(hold.day)
+  }
+
+  const WORLD_PAIR_SCENES = [
+    'a candlelit dinner date at a rooftop restaurant',
+    'a wild night out at a club in the city',
+    'a relaxed lunch catching up like old friends',
+    'a charity gala where they kept close all evening',
+    'a weekend beach getaway together',
+    'a late-night drinks after a party',
+  ]
+  const WORLD_SOLO_SCENES = [
+    'a shopping trip downtown that turned into a crowd',
+    'a late-night airport arrival',
+    'a film premiere red carpet',
+    'a quiet coffee run that got photographed',
+    'a gym session that went viral',
+    'a family holiday abroad',
+  ]
+
+  // Not everything is about the player: now and then the tabloids run a
+  // story about celebs in their own lives — two of them out together, or one
+  // caught out alone — and the world reacts under their posts. Never on a
+  // day the news outlet is already busy.
+  function runWorldGossip() {
+    const state = get()
+    const celebs = Object.values(state.profiles)
+      .filter(isNPC)
+      .filter((n) => tierForPersona(n.persona) === 'celeb')
+    if (celebs.length === 0) return
+    const rng = mulberry32(hashStringToSeed(`world_${state.gameDay}_${state.clock}`))
+    if (rng() > 0.4) return
+    const outlet = pickMediaOutlet(Object.values(state.profiles).filter(isNPC))
+    if (!outlet) return
+    const outletToday = Object.values(state.posts).filter((p) => p.authorId === outlet.id && p.gameDay === state.gameDay).length
+    if (outletToday >= 2) return
+
+    const a = pick(rng, celebs)
+    const others = celebs.filter((c) => c.id !== a.id)
+    const b = others.length > 0 && rng() < 0.65 ? pick(rng, others) : undefined
+    runGossip({
+      kind: 'activity',
+      playerName: a.displayName,
+      detail: pick(rng, b ? WORLD_PAIR_SCENES : WORLD_SOLO_SCENES),
+      tags: [],
+      others: b ? [b.displayName] : [],
+      world: true,
+      subjectNpcId: a.id,
+    })
+  }
+
+  // Looks the celebs up on Wikipedia (once each) so they, and the AI writing
+  // as them, know what they're really known for. See engine/wikiFacts.ts.
+  async function hydrateKnowledge() {
+    const targets = Object.values(get().profiles)
+      .filter(isNPC)
+      .filter((n) => tierForPersona(n.persona) === 'celeb' && !n.knowledgeChecked)
+      .slice(0, 20)
+    if (targets.length === 0) return
+    const results = await Promise.all(targets.map(async (n) => ({ id: n.id, facts: await fetchWikipediaFacts(n.displayName) })))
+    set((st) => {
+      const profiles = { ...st.profiles }
+      for (const r of results) {
+        const cur = profiles[r.id]
+        if (cur && isNPC(cur)) profiles[r.id] = { ...cur, knowledge: r.facts ?? cur.knowledge, knowledgeChecked: true }
+      }
+      return { profiles }
+    })
   }
 
   // Celebs the player is getting along with (relationship in the green, 25%+)
@@ -877,7 +1003,8 @@ export const useGameStore = create<GameState>((set, get) => {
     function scheduleGossipComments(storyPostId: string) {
       const snapshot = get()
       const everyone = Object.values(snapshot.profiles).filter(isNPC)
-      const participants = everyone.filter((n) => subject.others.includes(n.displayName))
+      const subjectNpc = subject.subjectNpcId ? everyone.find((n) => n.id === subject.subjectNpcId) : undefined
+      const participants = [...(subjectNpc ? [subjectNpc] : []), ...everyone.filter((n) => subject.others.includes(n.displayName))]
       const isParticipant = (id: string) => participants.some((p) => p.id === id)
       const isCommenter = (n: NPC) => tierForPersona(n.persona) === 'commenter' || n.persona === 'celebrity'
       let pool = everyone.filter((n) => isCommenter(n) && n.id !== outlet!.id && !isParticipant(n.id))
@@ -925,7 +1052,7 @@ export const useGameStore = create<GameState>((set, get) => {
         const theirPost = latestPostBy(participant.id)
         if (theirPost) add(theirPost.id, 'participant_post', randomInt(rng, 2, 3), participant.displayName)
       }
-      if (subject.kind !== 'post') {
+      if (subject.kind !== 'post' && !subject.world) {
         const playersPost = latestPostBy(PLAYER_ID)
         if (playersPost) add(playersPost.id, 'player_post', randomInt(rng, 2, 3), subject.others[0])
       }
@@ -974,7 +1101,21 @@ export const useGameStore = create<GameState>((set, get) => {
         const lastToday = today.at(-1)
         const at = lastToday ? st.postOrder.indexOf(lastToday) + 1 : 0
         const postOrder = [...st.postOrder.slice(0, at), story.id, ...st.postOrder.slice(at)]
-        return { posts: { ...st.posts, [story.id]: story }, postOrder }
+        const involved = Object.values(st.profiles)
+          .filter(isNPC)
+          .filter((n) => subject.others.includes(n.displayName) || n.id === subject.subjectNpcId)
+          .map((n) => n.id)
+        const remembered: WorldStory = {
+          id: makeId('news'),
+          day: st.gameDay,
+          text: story.text,
+          people: subject.world ? involved : [PLAYER_ID, ...involved],
+        }
+        return {
+          posts: { ...st.posts, [story.id]: story },
+          postOrder,
+          worldStories: [...st.worldStories, remembered].slice(-60),
+        }
       })
       scheduleGossipComments(story.id)
     }
@@ -1132,6 +1273,7 @@ export const useGameStore = create<GameState>((set, get) => {
   worldSettings: defaultWorldSettings(),
   achievements: [],
   mutedAccounts: [],
+  worldStories: [],
   activities: {},
   activeEncounter: null,
   onboarded: false,
@@ -1232,17 +1374,20 @@ export const useGameStore = create<GameState>((set, get) => {
       worldSettings: defaultWorldSettings(),
       achievements: [],
       mutedAccounts: [],
+      worldStories: [],
       activities: {},
       activeEncounter: null,
       onboarded: true,
       lastOutcomeReport: null,
     })
 
+    void hydrateKnowledge()
+
     if (aiEligible && config) {
       const all = Object.values(get().posts)
-      const feed = get().postOrder.map((id) => get().posts[id]).filter((p) => p?.kind === 'post').slice(0, 8)
-      const stories = all.filter((p) => p.kind === 'story' && p.authorId !== PLAYER_ID)
-      void aiPopulateComments([...feed, ...stories], () => AI_COMMENTS_PER_PARENT).then((ok) => {
+      const feed = get().postOrder.map((id) => get().posts[id]).filter((p) => p?.kind === 'post').slice(0, 4)
+      const stories = all.filter((p) => p.kind === 'story' && p.authorId !== PLAYER_ID).slice(0, 6)
+      void aiPopulateComments([...feed, ...stories], (p) => Math.min(p.kind === 'story' ? 6 : 12, strippedCounts[p.id] ?? 6)).then((ok) => {
         if (!ok) addTemplateReplies(all.filter((p) => p.kind !== 'reply'), strippedCounts)
       })
     }
@@ -1387,11 +1532,13 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     })
 
+    void hydrateKnowledge()
+
     // AI mode: the new person's story gets AI comments instead of canned ones.
     const newStory = Object.values(get().posts).find((p) => p.kind === 'story' && p.authorId === id)
     if (newStory && newStory.replies > 0 && !Object.values(get().posts).some((p) => p.parentId === newStory.id)) {
       const counts = { [newStory.id]: newStory.replies }
-      void aiPopulateComments([newStory], () => AI_COMMENTS_PER_PARENT).then((ok) => {
+      void aiPopulateComments([newStory], (p) => Math.min(8, p.replies)).then((ok) => {
         if (!ok) addTemplateReplies([newStory], counts)
       })
     }
@@ -1678,7 +1825,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
 
     // Decided up front so the report card can say whether the tabloids ran it.
-    const tabloidRunsIt = tags.length > 0 || rng() < 0.6
+    const tabloidRunsIt = tags.length > 0 || rng() < 0.25
     const tabloidName = pickMediaOutlet(npcs)?.displayName
 
     const logEntry: ActivityLogEntry = {
@@ -2209,11 +2356,13 @@ export const useGameStore = create<GameState>((set, get) => {
       worldSettings: save.worldSettings,
       achievements: save.achievements,
       mutedAccounts: save.mutedAccounts,
+      worldStories: save.worldStories ?? [],
       activities: save.activities,
       activeEncounter: null,
       onboarded: save.onboarded,
       lastOutcomeReport: null,
     })
+    void hydrateKnowledge()
   },
 
   resetWorld: () => {
@@ -2231,6 +2380,7 @@ export const useGameStore = create<GameState>((set, get) => {
       worldSettings: defaultWorldSettings(),
       achievements: [],
       mutedAccounts: [],
+      worldStories: [],
       activities: {},
       activeEncounter: null,
       onboarded: false,
@@ -2255,6 +2405,7 @@ export const useGameStore = create<GameState>((set, get) => {
       worldSettings: state.worldSettings,
       achievements: state.achievements,
       mutedAccounts: state.mutedAccounts,
+      worldStories: state.worldStories,
       activities: state.activities,
       onboarded: state.onboarded,
     }
