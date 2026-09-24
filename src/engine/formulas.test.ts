@@ -3,6 +3,7 @@ import { mulberry32 } from './rng'
 import {
   commentCountForPost,
   estimateEngagement,
+  estimateReplyEngagement,
   followerDeltaFromEngagement,
   statDeltasForTags,
 } from './formulas'
@@ -80,5 +81,21 @@ describe('statDeltasForTags', () => {
     const single = statDeltasForTags(mulberry32(1), ['gratitude'])
     const combined = statDeltasForTags(mulberry32(1), ['gratitude', 'big_moment'])
     expect(combined.length).toBeGreaterThan(single.length)
+  })
+})
+
+describe('estimateReplyEngagement', () => {
+  it('never leaves a reply with zero likes, even for a zero-follower author', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const result = estimateReplyEngagement(mulberry32(seed), 0, 0)
+      expect(result.likes).toBeGreaterThanOrEqual(2)
+      expect(result.reposts).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('scales up with a bigger author', () => {
+    const small = estimateReplyEngagement(mulberry32(7), 100, 50)
+    const big = estimateReplyEngagement(mulberry32(7), 5_000_000, 50)
+    expect(big.likes).toBeGreaterThan(small.likes)
   })
 })

@@ -40,6 +40,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
   // Instagram — a quick tap still navigates, a sustained press just pauses
   // and resumes on release without jumping anywhere.
   const [held, setHeld] = useState(false)
+  const [replyFocused, setReplyFocused] = useState(false)
   const pointerDownAtRef = useRef(0)
   const HOLD_THRESHOLD_MS = 200
 
@@ -111,17 +112,30 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
     if (prevAuthor) onChangeAuthor(prevAuthor)
   }
 
+  // The story freezes — progress bar and auto-advance both — while the
+  // player is holding the screen, reading/typing in the comments panel, or
+  // focused/typing in the reply box. Anything else would silently redirect
+  // their message to whoever's story comes next, yank a panel closed, or
+  // skip a story they were still reading.
+  const paused = held || showComments || replyFocused || replyText.length > 0 || commentText.length > 0
+
+  // Time already spent on the current story, so resuming after a pause
+  // continues from where the bar stopped instead of restarting the timer.
+  const elapsedRef = useRef(0)
   useEffect(() => {
-    // Don't advance out from under a reply/comment the player is mid-typing,
-    // while they're reading the comments panel, or while they're pressing
-    // and holding — any of those would silently redirect their message to
-    // whoever's story comes next, yank a panel closed, or skip a story they
-    // were still reading.
-    if (!story || replyText.length > 0 || showComments || held) return
-    const timer = setTimeout(goNext, STORY_DURATION_MS)
-    return () => clearTimeout(timer)
+    elapsedRef.current = 0
+  }, [story?.id])
+
+  useEffect(() => {
+    if (!story || paused) return
+    const startedAt = Date.now()
+    const timer = setTimeout(goNext, Math.max(0, STORY_DURATION_MS - elapsedRef.current))
+    return () => {
+      clearTimeout(timer)
+      elapsedRef.current += Date.now() - startedAt
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorId, storyIndex, story, replyText.length > 0, showComments, held])
+  }, [authorId, storyIndex, story?.id, paused])
 
   const handleReply = () => {
     if (!replyText.trim() || authorId === PLAYER_ID) return
@@ -180,7 +194,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
                       ? {
                           width: '100%',
                           animation: `story-progress ${STORY_DURATION_MS}ms linear forwards`,
-                          animationPlayState: held ? 'paused' : 'running',
+                          animationPlayState: paused ? 'paused' : 'running',
                         }
                       : { width: '0%' }
                 }
@@ -233,6 +247,8 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value.slice(0, 280))}
                 onKeyDown={(e) => e.key === 'Enter' && handleReply()}
+                onFocus={() => setReplyFocused(true)}
+                onBlur={() => setReplyFocused(false)}
                 placeholder={`Reply to ${shortNameFor(author.displayName)}'s story`}
                 className="min-w-0 flex-1 rounded-full border border-white/40 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/70 outline-none focus:border-white"
               />

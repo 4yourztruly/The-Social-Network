@@ -48,6 +48,16 @@ export function estimateEngagement(
   return { likes, reposts }
 }
 
+// A reply/comment draws a small fraction of what its author's top-level
+// posts would, but never nothing — every reply on the feed gets at least a
+// handful of likes, and reposts scale off those likes.
+export function estimateReplyEngagement(rng: RNG, followers: number, socialScore: number): Engagement {
+  const base = estimateEngagement(rng, Math.round(followers / 20), socialScore, [])
+  const likes = Math.max(randomInt(rng, 2, 9), base.likes)
+  const reposts = Math.max(0, Math.round(likes * (0.03 + rng() * 0.05)))
+  return { likes, reposts }
+}
+
 export function followerDeltaFromEngagement(engagement: Engagement): number {
   return Math.round(engagement.likes * 0.002 + engagement.reposts * 0.01)
 }

@@ -127,6 +127,12 @@ function PostCardImpl({ postId, onOpenProfile, onOpenThread, onReply }: PostCard
               <HeartIcon className="h-[18px] w-[18px]" filled={!!post.likedByPlayer} />
               {formatCompactNumber(post.likes)}
             </button>
+            {post.reposts > 0 && (
+              <span className="flex items-center gap-1.5 text-xs">
+                <RepostIcon className="h-[18px] w-[18px]" />
+                {formatCompactNumber(post.reposts)}
+              </span>
+            )}
             <span className="text-xs">|</span>
             <button
               onClick={handleReplyStopped}

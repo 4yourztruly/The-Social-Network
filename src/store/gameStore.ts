@@ -40,7 +40,7 @@ import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
 import { createGameEvent } from '../engine/events'
 import { applyPlayerEffects, lastStatChangesFromEffects, xpFromEffects } from '../engine/effects'
-import { statDeltasForTags } from '../engine/formulas'
+import { estimateReplyEngagement, statDeltasForTags } from '../engine/formulas'
 import { splitDueItems } from '../engine/scheduler'
 import {
   runReactionEngine,
@@ -326,6 +326,12 @@ export const useGameStore = create<GameState>((set, get) => {
     set((state) => {
       const parent = state.posts[payload.parentPostId]
       if (!parent) return state
+      const commenter = state.profiles[payload.npcId]
+      const commentEngagement = estimateReplyEngagement(
+        mulberry32(hashStringToSeed(`${commentPostId}_engagement`)),
+        commenter?.followers ?? 0,
+        (state.player.humor + state.player.aura) / 2,
+      )
       const commentPost: Post = {
         id: commentPostId,
         authorId: payload.npcId,
@@ -334,8 +340,8 @@ export const useGameStore = create<GameState>((set, get) => {
         text,
         tags: payload.tags,
         createdAt: dueAt,
-        likes: 0,
-        reposts: 0,
+        likes: commentEngagement.likes,
+        reposts: commentEngagement.reposts,
         replies: 0,
         origin,
       }
@@ -977,6 +983,11 @@ export const useGameStore = create<GameState>((set, get) => {
     set((state) => {
       const parent = state.posts[parentId]
       if (!parent) return state
+      const playerReplyEngagement = estimateReplyEngagement(
+        mulberry32(hashStringToSeed(`${replyId}_engagement`)),
+        state.profiles[PLAYER_ID]?.followers ?? 0,
+        (state.player.humor + state.player.aura) / 2,
+      )
       const reply: Post = {
         id: replyId,
         authorId: PLAYER_ID,
@@ -986,8 +997,8 @@ export const useGameStore = create<GameState>((set, get) => {
         tags: [],
         createdAt: Date.now(),
         gameDay: state.gameDay,
-        likes: 0,
-        reposts: 0,
+        likes: playerReplyEngagement.likes,
+        reposts: playerReplyEngagement.reposts,
         replies: 0,
         origin: 'player',
       }
@@ -1592,12 +1603,28 @@ export const useGameStore = create<GameState>((set, get) => {
     set((state) => ({ worldSettings: { ...state.worldSettings, ...patch } })),
 
   hydrateFromSave: (save) => {
+    // Replies saved before replies were guaranteed engagement (or created by
+    // paths that never gave them any) sit at 0 likes — backfill them once,
+    // deterministically per reply id, so they look like the rest.
+    const posts: Record<string, Post> = {}
+    for (const [id, post] of Object.entries(save.posts)) {
+      if (post.kind === 'reply' && post.likes === 0 && post.reposts === 0) {
+        const engagement = estimateReplyEngagement(
+          mulberry32(hashStringToSeed(`${id}_engagement`)),
+          save.profiles[post.authorId]?.followers ?? 0,
+          (save.player.humor + save.player.aura) / 2,
+        )
+        posts[id] = { ...post, likes: engagement.likes, reposts: engagement.reposts }
+      } else {
+        posts[id] = post
+      }
+    }
     set({
       clock: save.clock,
       gameDay: save.gameDay ?? 1,
       player: save.player,
       profiles: save.profiles,
-      posts: save.posts,
+      posts,
       postOrder: Object.values(save.posts)
         .sort((a, b) => b.createdAt - a.createdAt)
         .map((p) => p.id),

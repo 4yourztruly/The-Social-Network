@@ -8,7 +8,7 @@ import { pushRecentLine, selectLine, selectPlainLine } from '../engine/templates
 import { applyPersonalityVoice } from '../engine/voice'
 import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
 import { GENERIC_OFFTOPIC_POSTS, GENERIC_OFFTOPIC_REACTION_POOL } from './genericFiller'
-import { estimateEngagement } from '../engine/formulas'
+import { estimateEngagement, estimateReplyEngagement } from '../engine/formulas'
 
 // Stand-in "social score" (see engine/formulas.estimateEngagement — normally
 // the player's humor+aura) used to size NPC-authored engagement numbers.
@@ -300,6 +300,7 @@ export function seedReplies(
       }
 
       const createdAt = Math.min(now, parent.createdAt + randomInt(rng, 1, 120) * 60 * 1000)
+      const replyEngagement = estimateReplyEngagement(rng, commenter.followers, NPC_SOCIAL_SCORE)
       const reply: Post = {
         id: makeId('post'),
         authorId: commenter.id,
@@ -308,11 +309,8 @@ export function seedReplies(
         text,
         tags: [],
         createdAt,
-        // A reply's own likes are a small fraction of what the same person's
-        // top-level posts would draw — replies don't get anywhere near a
-        // post's visibility.
-        likes: estimateEngagement(rng, Math.round(commenter.followers / 20), NPC_SOCIAL_SCORE, []).likes,
-        reposts: 0,
+        likes: replyEngagement.likes,
+        reposts: replyEngagement.reposts,
         replies: 0,
         origin: 'template',
       }
