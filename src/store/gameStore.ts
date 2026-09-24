@@ -42,6 +42,7 @@ import { isNPC } from '../types'
 import { resolvePublicity } from '../engine/publicity'
 import type { WorldStory } from '../types'
 import { fetchWikipediaFacts } from '../engine/wikiFacts'
+import { padCelebs } from '../content/celebPool'
 import { registerMemorySource } from '../engine/npcMemory'
 import { acknowledgementPost, secretPost, specificCelebPost } from '../engine/specificContent'
 import { makeId } from '../engine/id'
@@ -1493,7 +1494,7 @@ export const useGameStore = create<GameState>((set, get) => {
     const usedUsernames = new Set<string>()
     const mediaSeeds = buildFixedMediaSeeds(rng)
     for (const m of mediaSeeds) usedUsernames.add(m.username)
-    const celebSeeds = await buildCelebSeeds(input.celebs ?? [], aiEligible ? config : undefined, rng, usedUsernames)
+    const celebSeeds = await buildCelebSeeds(padCelebs(input.celebs ?? [], rng), aiEligible ? config : undefined, rng, usedUsernames)
     const celebAvatarPool = celebSeeds.flatMap((c) => (c.avatar?.kind === 'webp' ? [c.avatar.value] : []))
 
     let commenterSeeds: NPCSeed[] | undefined

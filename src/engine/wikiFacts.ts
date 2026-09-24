@@ -153,7 +153,9 @@ async function factsAboutTopic(topic: string, signal: AbortSignal): Promise<stri
 // Returns '' when nothing is found; never throws.
 export async function lookupForMessage(message: string, personName: string): Promise<string> {
   const topics = extractTopics(message).filter((t) => normalize(t).trim() !== normalize(personName).trim())
-  if (topics.length === 0) return ''
+  // A question about their own career/life needs no named topic.
+  const aboutThem = lookupAboutPerson(message, personName)
+  if (topics.length === 0) return aboutThem
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
@@ -173,7 +175,68 @@ export async function lookupForMessage(message: string, personName: string): Pro
         return facts
       }),
     )
-    return results.filter(Boolean).join('\n')
+    return [await aboutThem, ...results].filter(Boolean).join('\n')
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// ---- Questions about the person themselves -----------------------------------
+// "What roles have you been in?" names nothing to look up — but it's plainly
+// about the person's own career, so pull that from their article.
+
+const SELF_TOPICS: { ask: RegExp; keys: string[] }[] = [
+  {
+    ask: /\b(roles?|movies?|films?|shows?|series|tv|television|played|starred|acting|acted|cast|filmography|screen|projects?|worked on|characters?)\b/i,
+    keys: ['role', 'film', 'series', 'starred', 'cast', 'played', 'portray', 'appear', 'television', 'movie', 'lead', 'debut', 'drama'],
+  },
+  {
+    ask: /\b(songs?|albums?|music|singing|sing|discography|tour|band|singles?|record)\b/i,
+    keys: ['album', 'song', 'single', 'tour', 'released', 'music', 'record', 'chart', 'debut'],
+  },
+  {
+    ask: /\b(team|club|sport|football|soccer|basketball|tennis|league|season|goals?|match|played for|transfer)\b/i,
+    keys: ['club', 'team', 'season', 'goal', 'league', 'match', 'signed', 'joined', 'national'],
+  },
+  {
+    ask: /\b(born|grew up|from|hometown|childhood|family|age|old are you|raised|school)\b/i,
+    keys: ['born', 'raised', 'grew up', 'moved', 'family', 'attended', 'school', 'hometown'],
+  },
+  {
+    ask: /\b(career|known for|famous|awards?|break ?through|started|big break|success)\b/i,
+    keys: ['known', 'career', 'award', 'nominated', 'breakthrough', 'role', 'won', 'began', 'started'],
+  },
+]
+
+export async function lookupAboutPerson(message: string, personName: string): Promise<string> {
+  const matched = SELF_TOPICS.filter((t) => t.ask.test(message))
+  if (matched.length === 0) return ''
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const search = (await getJson(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(personName)}&srlimit=1&format=json&origin=*`,
+      controller.signal,
+    )) as { query?: { search?: { title: string }[] } }
+    const title = search.query?.search?.[0]?.title
+    if (!title || !titleMatchesName(personName, title)) return ''
+    const article = await fetchFullArticle(title, controller.signal)
+    if (!article) return ''
+    const keys = matched.flatMap((t) => t.keys)
+    const sentences = article.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+/)
+    const picked: string[] = []
+    let total = 0
+    for (const sentence of sentences) {
+      const lower = sentence.toLowerCase()
+      if (!keys.some((k) => lower.includes(k))) continue
+      if (sentence.length > 320) continue
+      picked.push(sentence)
+      total += sentence.length
+      if (total > 1600) break
+    }
+    return picked.length > 0 ? `About ${personName}'s own life and work (from Wikipedia — answer from these, never invent titles): ${picked.join(' ')}` : ''
+  } catch {
+    return ''
   } finally {
     clearTimeout(timeout)
   }

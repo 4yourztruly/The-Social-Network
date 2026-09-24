@@ -211,7 +211,8 @@ export function Onboarding() {
             <h2 className="text-sm font-semibold">Customize your universe</h2>
             <p className="mt-1 text-xs text-neutral-500">
               Add the celebrities you want in your world. Everyone is just themselves — no teammates or coaches
-              unless you add them. The news and the tabloid are always the same.
+              unless you add them. The news and the tabloid are always the same. If you add fewer than 10, we'll fill
+              the rest with an even mix of genders and professions — actors, musicians, athletes, creators, comedians and hosts.
             </p>
 
             <p className="mt-3 text-xs font-semibold text-neutral-500">Always in every universe</p>

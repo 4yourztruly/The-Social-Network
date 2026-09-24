@@ -54,3 +54,16 @@ describe('on-demand lookups', () => {
     if (out) expect(out).toMatch(/Outer Banks/)
   })
 })
+
+describe('shared history', () => {
+  it('counts every time together and keeps what actually happened', () => {
+    const mk = (id: string, description: string, at: number, text: string) =>
+      ({ id, description, participantIds: ['n1'], status: 'ended', startAt: 0, createdAt: at, turnCount: 2, tags: [], pendingChoices: [],
+        messages: [{ id: 'm' + id, from: 'narrator', text, at, origin: 'ai' }], outcomeSummary: 'went well' }) as unknown as Activity
+    const acts = Object.fromEntries([1, 2, 3, 4].map((i) => [`a${i}`, mk(`a${i}`, `Date number ${i}`, i, `They laughed all night on date ${i}`)]))
+    const out = buildDossier(npc, { playerName: 'Tim', activities: acts, threads: {}, posts: {}, profiles: {}, worldStories: [] })
+    expect(out).toContain('4 times')
+    expect(out).toContain('Date number 4')
+    expect(out).toContain('laughed all night on date 4')
+  })
+})

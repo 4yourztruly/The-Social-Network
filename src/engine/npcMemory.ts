@@ -25,7 +25,8 @@ export function registerMemorySource(fn: () => MemoryState): void {
   source = fn
 }
 
-const MAX_ACTIVITIES = 3
+const MAX_ACTIVITIES = 6
+const MAX_DETAILED_ACTIVITIES = 2
 const MAX_DMS = 4
 const MAX_PUBLIC = 3
 const MAX_NEWS = 3
@@ -36,18 +37,31 @@ export function buildDossier(npc: NPC, state: MemoryState | null): string {
   if (!state) return lines.join('\n')
 
   const player = state.playerName
-  const activities = Object.values(state.activities)
-    .filter((a) => a.participantIds.includes(npc.id) && (a.status === 'ended' || a.status === 'active'))
+  // Everything you two have actually done together — the count, and what
+  // really happened in the most recent ones (the scene's own beats, not a
+  // canned "it went well"). People who were invited but declined weren't there.
+  const together = Object.values(state.activities)
+    .filter((a) => a.participantIds.includes(npc.id) && a.rsvps?.[npc.id] !== 'declined' && (a.status === 'ended' || a.status === 'active'))
     .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, MAX_ACTIVITIES)
-  for (const a of activities) {
-    if (a.status === 'ended') {
-      lines.push(`- You and ${player} did this together: "${a.description}". How it went: ${a.outcomeSummary ?? 'it wrapped up'}.`)
-    } else {
-      const last = a.messages.at(-1)
-      lines.push(`- You are with ${player} right now: "${a.description}".${last ? ` Latest: ${last.text}` : ''}`)
-    }
+  if (together.length > 0) {
+    lines.push(`- You and ${player} have spent time together ${together.length} ${together.length === 1 ? 'time' : 'times'}: ${together
+      .slice(0, MAX_ACTIVITIES)
+      .map((a) => `"${a.description}"`)
+      .join(', ')}${together.length > MAX_ACTIVITIES ? ', and more' : ''}. You remember all of it.`)
   }
+  together.slice(0, MAX_DETAILED_ACTIVITIES).forEach((a, i) => {
+    const beats = a.messages
+      .slice(-4)
+      .map((m) => `${m.from === 'player' ? player : 'Narrator'}: ${m.text}`)
+      .join(' / ')
+      .slice(0, 420)
+    const when = i === 0 ? 'most recent' : 'earlier'
+    lines.push(
+      a.status === 'active'
+        ? `- You are with ${player} right now ("${a.description}"). What just happened: ${beats}`
+        : `- In the ${when} one ("${a.description}"): ${beats}. Outcome: ${a.outcomeSummary ?? 'it wrapped up'}.`,
+    )
+  })
 
   const thread = state.threads[npc.id]
   if (thread && thread.messages.length > 0) {
@@ -92,7 +106,7 @@ export function npcDossier(npc: NPC, compact = false): string {
       .join(' | ')
   }
   return [
-    `What ${npc.displayName} knows and remembers (these are real memories in this world — you are the same person everywhere, in DMs, activities, posts and comments. Act consistently with them and never as if they are news to you, or come out of nowhere):`,
+    `What ${npc.displayName} knows and remembers (these are real memories in this world — you are the same person everywhere, in DMs, activities, posts and comments. Act consistently with them and never as if they are news to you, or come out of nowhere. If the player mentions something in your shared history, answer as someone who was there — never ask what they mean or act like you don't know):`,
     body,
   ].join('\n')
 }
