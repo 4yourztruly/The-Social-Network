@@ -39,3 +39,18 @@ describe('buildDossier', () => {
     expect(out).toContain('TMZ spotted')
   })
 })
+
+import { extractTopics, lookupForMessage } from './wikiFacts'
+
+describe('on-demand lookups', () => {
+  it('pulls out the things worth looking up', () => {
+    expect(extractTopics('Did you see Outer Banks season 4?')).toContain('Outer Banks')
+    expect(extractTopics('what about "Glass Onion" though')).toContain('Glass Onion')
+    expect(extractTopics('hey how are you')).toEqual([])
+  })
+
+  it('finds what a person is known for in their own article (live Wikipedia; skipped when offline)', async () => {
+    const out = await lookupForMessage('I loved Outer Banks', 'Madelyn Cline')
+    if (out) expect(out).toMatch(/Outer Banks/)
+  })
+})

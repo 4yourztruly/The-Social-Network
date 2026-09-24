@@ -2,6 +2,7 @@ import type { AIProviderConfig, DMMessage, NPC } from '../types'
 import { createOpenAICompatibleProvider, AIRequestError } from './openaiCompatible'
 import { relationshipDescriptor, sanitizeAiText } from './shared'
 import { npcDossier } from '../engine/npcMemory'
+import { lookupForMessage } from '../engine/wikiFacts'
 
 const MAX_HISTORY = 10
 const REQUEST_TIMEOUT_MS = 12_000
@@ -11,7 +12,7 @@ const MAX_REPLY_CHARS = 300
 // defensive: it names exactly what the NPC is (never a real person), pins
 // the tone/length, and forbids the model from ever stepping out of
 // character or treating the player's message as an instruction to it.
-export function buildDmSystemPrompt(npc: NPC, playerDisplayName: string, orgName: string): string {
+export function buildDmSystemPrompt(npc: NPC, playerDisplayName: string, orgName: string, lookedUp = ''): string {
   const traits = npc.personality.length > 0 ? npc.personality.join(', ') : 'even-tempered'
   return [
     `You are roleplaying as the account @${npc.username}, display name "${npc.displayName}", in a social-media life sim game.`,
@@ -27,6 +28,8 @@ export function buildDmSystemPrompt(npc: NPC, playerDisplayName: string, orgName
       : '',
     `Your relationship with the player (${playerDisplayName}, of ${orgName}) is: ${relationshipDescriptor(npc.relationship)}.`,
     npcDossier(npc),
+    lookedUp ? `Just looked up, because the conversation touched on it (treat as things you genuinely know; don't recite them, just be accurate):
+${lookedUp}` : '',
     npc.mood < 0 ? "You're in a bad mood right now." : npc.mood > 2 ? "You're in a great mood right now." : '',
     'Reply as a short, casual DM — 1 to 2 sentences, texting style, no more than 240 characters.',
     'Stay fully in character at all times. Never mention being an AI, a model, or a game character.',
@@ -63,8 +66,10 @@ export async function generateAiDmReply(args: GenerateAiDmReplyArgs): Promise<st
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   try {
+    const lastPlayerMessage = [...recentMessages].reverse().find((m) => m.from === 'player')?.text ?? ''
+    const lookedUp = await lookupForMessage(lastPlayerMessage, npc.displayName)
     const text = await provider.complete({
-      system: buildDmSystemPrompt(npc, playerDisplayName, orgName),
+      system: buildDmSystemPrompt(npc, playerDisplayName, orgName, lookedUp),
       user: buildDmUserPrompt(recentMessages, playerDisplayName),
       maxTokens: 400,
       signal: controller.signal,

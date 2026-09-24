@@ -584,8 +584,13 @@ export const useGameStore = create<GameState>((set, get) => {
       .filter(isNPC)
       .filter((n) => tierForPersona(n.persona) === 'celeb' && !n.knowledgeChecked)
       .slice(0, 20)
-    if (targets.length === 0) return
-    const results = await Promise.all(targets.map(async (n) => ({ id: n.id, facts: await fetchWikipediaFacts(n.displayName) })))
+    if (targets.length === 0 || import.meta.env.MODE === 'test') return
+    // One at a time with a short gap — Wikipedia rate-limits bursts.
+    const results: { id: string; facts: string | null }[] = []
+    for (const n of targets) {
+      results.push({ id: n.id, facts: await fetchWikipediaFacts(n.displayName) })
+      await new Promise((r) => setTimeout(r, 200))
+    }
     set((st) => {
       const profiles = { ...st.profiles }
       for (const r of results) {
