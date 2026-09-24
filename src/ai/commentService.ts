@@ -15,6 +15,7 @@ export function buildCommentSystemPrompt(
   playerDisplayName: string,
   orgName: string,
   recentActivity: ActivityLogEntry[],
+  newsFacts?: string,
 ): string {
   const traits = npc.personality.length > 0 ? npc.personality.join(', ') : 'even-tempered'
   const gossip = recentActivity
@@ -38,6 +39,9 @@ export function buildCommentSystemPrompt(
     gossip
       ? `Recent things ${playerDisplayName} has done, that you'd plausibly know about or bring up:\n${gossip}`
       : '',
+    newsFacts
+      ? `Everyone is talking about this news right now (a tabloid just ran it): ${newsFacts}. Your comment MUST clearly and specifically refer to it — name the people involved and what happened, even if the post you're commenting under is about something else. Never be vague (no "you won't believe it").`
+      : '',
     'You are writing a short PUBLIC reply comment under their post — not a DM. Everyone can see it.',
     'If it fits your persona and relationship, you can casually reference the recent history above — like gossip, a callback, or a dig — but you do not have to force it in every time.',
     'Reply in 1 short sentence, casual social-media tone, no more than 200 characters.',
@@ -49,7 +53,13 @@ export function buildCommentSystemPrompt(
     .join('\n')
 }
 
-export function buildCommentUserPrompt(postText: string, playerDisplayName: string): string {
+export function buildCommentUserPrompt(postText: string, playerDisplayName: string, newsFacts?: string): string {
+  if (newsFacts) return `You're reacting under this post:
+"${postText}"
+
+But what you want to say is about this news: ${newsFacts}
+
+Write the short public comment now.`
   return `${playerDisplayName} just posted:\n"${postText}"\n\nReply as a short public comment.`
 }
 
@@ -60,21 +70,22 @@ export interface GenerateAiCommentArgs {
   postText: string
   recentActivity: ActivityLogEntry[]
   config: AIProviderConfig
+  newsFacts?: string
 }
 
 // Returns the comment text, or null on any failure — callers must fall back
 // to the deterministic template line already computed for this comment
 // (spec section 8, robustness rule 1: "gameplay never blocks on AI").
 export async function generateAiComment(args: GenerateAiCommentArgs): Promise<string | null> {
-  const { npc, playerDisplayName, orgName, postText, recentActivity, config } = args
+  const { npc, playerDisplayName, orgName, postText, recentActivity, config, newsFacts } = args
   const provider = createOpenAICompatibleProvider(config)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   try {
     const text = await provider.complete({
-      system: buildCommentSystemPrompt(npc, playerDisplayName, orgName, recentActivity),
-      user: buildCommentUserPrompt(postText, playerDisplayName),
+      system: buildCommentSystemPrompt(npc, playerDisplayName, orgName, recentActivity, newsFacts),
+      user: buildCommentUserPrompt(postText, playerDisplayName, newsFacts),
       maxTokens: 400,
       signal: controller.signal,
     })

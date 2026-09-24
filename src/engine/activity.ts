@@ -48,6 +48,27 @@ export function templatedActivityBeat(rng: RNG, playerChoiceText: string, partic
   return primary ? applyPersonalityVoice(filled, primary, rng) : filled
 }
 
+// The last beat of a scene: reacts to the player's final move (same line
+// pool as any other beat) and then says how it all wrapped up, so the
+// player sees a result for their last choice instead of the scene just
+// ending.
+const CLOSING_LINES = [
+  'As things wind down, {names} clearly enjoyed the time together — it ended on a good note.',
+  'The moment settles and {names} heads off with a smile. That went better than expected.',
+  "By the end, it's clear something shifted: {names} won't forget this one anytime soon.",
+]
+const SOLO_CLOSING_LINES = [
+  'The scene winds down, and it feels like a good use of the time.',
+  'It wraps up quietly — a solid, memorable moment.',
+]
+
+export function templatedActivityClosing(rng: RNG, playerChoiceText: string, participants: readonly NPC[]): string {
+  const reaction = templatedActivityBeat(rng, playerChoiceText, participants)
+  if (participants.length === 0) return `${reaction} ${pick(rng, SOLO_CLOSING_LINES)}`
+  const names = participants.map((p) => p.displayName).join(' and ')
+  return `${reaction} ${pick(rng, CLOSING_LINES).replace('{names}', names)}`
+}
+
 export function templatedActivityOpening(description: string, participants: readonly NPC[]): string {
   if (participants.length === 0) return description
   const names = participants.map((p) => p.displayName).join(' and ')

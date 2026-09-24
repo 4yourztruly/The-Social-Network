@@ -42,7 +42,15 @@ import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
 import { createGameEvent } from '../engine/events'
 import { applyPlayerEffects, lastStatChangesFromEffects, xpFromEffects } from '../engine/effects'
-import { estimateReplyEngagement, statDeltasForTags, storyCommentCount } from '../engine/formulas'
+import { estimateEngagement, estimateReplyEngagement, statDeltasForTags, storyCommentCount } from '../engine/formulas'
+import { explainStatDeltas, type OutcomeDetails } from '../engine/reportDetails'
+import {
+  gossipCommentText,
+  gossipFacts,
+  tabloidPostText,
+  type CommentTarget,
+  type GossipSubject,
+} from '../engine/gossip'
 import { splitDueItems } from '../engine/scheduler'
 import {
   runReactionEngine,
@@ -62,11 +70,10 @@ import { applyPersonalityVoice } from '../engine/voice'
 import {
   ACTIVITY_CHOICES,
   ACTIVITY_TURN_CAP,
-  buildTabloidLeakLine,
   computeRsvp,
-  coverageChance,
   pickMediaOutlet,
   templatedActivityBeat,
+  templatedActivityClosing,
   templatedActivityOpening,
   type RsvpDecision,
 } from '../engine/activity'
@@ -109,6 +116,9 @@ export interface OutcomeReport {
   relationshipChanges: RelationshipChangeSummary[]
   reason?: string
   commentCount?: number
+  // The expanded report card (tap the card): why things moved, relationship
+  // status now, and what the tabloids did with it.
+  details?: OutcomeDetails
 }
 
 // The "Event" button's random encounter — ephemeral, not part of SaveGame
@@ -423,6 +433,7 @@ export const useGameStore = create<GameState>((set, get) => {
         postText: snapshot.posts[payload.parentPostId]?.text ?? '',
         recentActivity: snapshot.activityLog,
         config: aiConfig,
+        newsFacts: payload.gossip,
       }).then((aiText) => {
         if (aiText) {
           recordSpend(aiConfig.id)
@@ -490,7 +501,7 @@ export const useGameStore = create<GameState>((set, get) => {
   // context-aware, plus the player's next choices) when available,
   // deterministic templates otherwise or on any failure. Same shape as the
   // DM/comment AI paths elsewhere in this file.
-  function advanceActivity(activityId: string, isOpening: boolean) {
+  function advanceActivity(activityId: string, isOpening: boolean, final = false) {
     const state = get()
     const activity = state.activities[activityId]
     if (!activity) return
@@ -510,15 +521,29 @@ export const useGameStore = create<GameState>((set, get) => {
 
     const fallbackText = isOpening
       ? templatedActivityOpening(activity.description, participants)
-      : templatedActivityBeat(
+      : final
+        ? templatedActivityClosing(
+            mulberry32(hashStringToSeed(`${activityId}_closing`)),
+            activity.messages.at(-1)?.text ?? '',
+            participants,
+          )
+        : templatedActivityBeat(
           mulberry32(hashStringToSeed(`${activityId}_${activity.messages.length}`)),
           activity.messages.at(-1)?.text ?? '',
           participants,
         )
-    const fallbackChoices = ACTIVITY_CHOICES
+    const fallbackChoices = final ? [] : ACTIVITY_CHOICES
+
+    // The closing beat is shown first; only then does the activity end (and
+    // its report card appear), so the player sees the result of their last
+    // move instead of the scene just cutting off.
+    const finish = () => {
+      if (final) get().endActivity(activityId)
+    }
 
     if (!aiEligible) {
       appendActivityMessage(activityId, fallbackText, 'template', fallbackChoices)
+      finish()
       return
     }
 
@@ -531,72 +556,144 @@ export const useGameStore = create<GameState>((set, get) => {
       orgName,
       recentMessages: activity.messages,
       config,
+      final,
     }).then((turn) => {
       set((s) => ({ aiTyping: s.aiTyping.filter((id) => id !== activityId) }))
       if (turn) {
         recordSpend(config.id)
-        appendActivityMessage(activityId, turn.beat, 'ai', turn.choices)
+        appendActivityMessage(activityId, turn.beat, 'ai', final ? [] : turn.choices)
       } else {
         appendActivityMessage(activityId, fallbackText, 'template', fallbackChoices)
       }
+      finish()
     })
   }
 
-  // A media outlet NPC posts a standalone top-level post about a leaked
-  // activity — "tabloids post about rumours, paparazzi can catch you."
-  // Reuses the exact same template pipeline as post comments, just
-  // materialized as its own post instead of a reply.
-  function triggerMediaCoverage(outlet: NPC, description: string, tags: string[], participantNames: string[] = []) {
+  // The gossip layer (see engine/gossip.ts): every player post, activity and
+  // event gets a specific tabloid story, and people then comment about it —
+  // under the tabloid's own post, under the other person's posts, under the
+  // player's own posts, and now and then under an unrelated post — so the
+  // world visibly reacts to what actually happened, with names and details.
+  function runGossip(subject: GossipSubject) {
     const state = get()
-    const playerProfile = state.profiles[PLAYER_ID] as Profile
-    const rng = mulberry32(hashStringToSeed(`${outlet.id}_${Date.now()}_coverage`))
-    // A leak needs to reference what actually happened — unlike ordinary
-    // tabloid flavor posts, this always has real context (description/tags/
-    // who was involved) to work with, so it skips the generic reactionPool
-    // draw entirely in favor of a templated line built around that context.
-    const fallbackText = applyPersonalityVoice(
-      buildTabloidLeakLine(rng, playerProfile.displayName, description, tags, participantNames),
-      outlet,
-      rng,
-    )
+    const npcs = Object.values(state.profiles).filter(isNPC)
+    const outlet = pickMediaOutlet(npcs)
+    if (!outlet) return
+    const rng = mulberry32(hashStringToSeed(`${outlet.id}_${Date.now()}_gossip`))
+    const facts = gossipFacts(subject)
+    const fallbackText = applyPersonalityVoice(tabloidPostText(rng, subject), outlet, rng)
 
-    function materializeCoveragePost(text: string, origin: Post['origin']) {
-      set((s) => {
-        const post: Post = {
-          id: makeId('post'),
-          authorId: outlet.id,
-          kind: 'post',
-          text,
-          tags,
-          createdAt: Date.now(),
-          gameDay: s.gameDay,
-          likes: 0,
-          reposts: 0,
-          replies: 0,
-          origin,
+    function scheduleGossipComments(storyPostId: string) {
+      const snapshot = get()
+      const everyone = Object.values(snapshot.profiles).filter(isNPC)
+      const participants = everyone.filter((n) => subject.others.includes(n.displayName))
+      const isParticipant = (id: string) => participants.some((p) => p.id === id)
+      const isCommenter = (n: NPC) => tierForPersona(n.persona) === 'commenter' || n.persona === 'celebrity'
+      let pool = everyone.filter((n) => isCommenter(n) && n.id !== outlet!.id && !isParticipant(n.id))
+      if (pool.length === 0) pool = everyone.filter((n) => tierForPersona(n.persona) !== 'media' && !isParticipant(n.id))
+      if (pool.length === 0) return
+
+      const nowMs = Date.now()
+      const items: ScheduledCommentItem[] = []
+      const used = new Set<string>()
+      const usedTexts = new Set<string>()
+      const add = (parentPostId: string, target: CommentTarget, count: number, other?: string) => {
+        for (let i = 0; i < count; i++) {
+          const candidates = pool.filter((n) => !used.has(`${parentPostId}:${n.id}`))
+          if (candidates.length === 0) break
+          const npc = pick(rng, candidates)
+          // Nobody repeats what someone already said under the same post.
+          let text = ''
+          for (let attempt = 0; attempt < 8 && (text === '' || usedTexts.has(`${parentPostId}:${text}`)); attempt++) {
+            text = gossipCommentText(rng, subject, target, other)
+          }
+          if (usedTexts.has(`${parentPostId}:${text}`)) continue
+          usedTexts.add(`${parentPostId}:${text}`)
+          used.add(`${parentPostId}:${npc.id}`)
+          items.push({
+            id: makeId('sched'),
+            dueAt: nowMs + randomInt(rng, 1_000, 25_000),
+            kind: 'comment',
+            payload: {
+              parentPostId,
+              npcId: npc.id,
+              text: applyPersonalityVoice(text, npc, rng),
+              tags: [...subject.tags],
+              aiEligible: true,
+              gossip: facts,
+            },
+          })
         }
-        return { posts: { ...s.posts, [post.id]: post }, postOrder: [post.id, ...s.postOrder] }
-      })
+      }
+      const topLevel = (id: string) => snapshot.posts[id]
+      const latestPostBy = (authorId: string) =>
+        snapshot.postOrder.map(topLevel).find((p) => p && p.kind === 'post' && p.authorId === authorId)
+
+      add(storyPostId, 'tabloid', randomInt(rng, 5, 8))
+      for (const participant of participants.slice(0, 2)) {
+        const theirPost = latestPostBy(participant.id)
+        if (theirPost) add(theirPost.id, 'participant_post', randomInt(rng, 2, 3), participant.displayName)
+      }
+      if (subject.kind !== 'post') {
+        const playersPost = latestPostBy(PLAYER_ID)
+        if (playersPost) add(playersPost.id, 'player_post', randomInt(rng, 2, 3), subject.others[0])
+      }
+      const unrelated = snapshot.postOrder
+        .map(topLevel)
+        .filter(
+          (p): p is Post =>
+            !!p &&
+            p.kind === 'post' &&
+            p.id !== storyPostId &&
+            p.authorId !== PLAYER_ID &&
+            p.authorId !== outlet!.id &&
+            !isParticipant(p.authorId),
+        )
+        .slice(0, 25)
+      const unrelatedCount = randomInt(rng, 1, 2)
+      for (let i = 0; i < unrelatedCount && unrelated.length > 0; i++) {
+        const [post] = unrelated.splice(Math.floor(rng() * unrelated.length), 1)
+        add(post.id, 'unrelated', 1, subject.others[0])
+      }
+      processComments(items)
+    }
+
+    function materializeStory(text: string, origin: Post['origin']) {
+      const engagement = estimateEngagement(rng, outlet!.followers, 45, subject.tags)
+      const story: Post = {
+        id: makeId('post'),
+        authorId: outlet!.id,
+        kind: 'post',
+        text,
+        tags: [...subject.tags],
+        createdAt: Date.now(),
+        gameDay: get().gameDay,
+        likes: engagement.likes,
+        reposts: engagement.reposts,
+        replies: 0,
+        origin,
+      }
+      set((st) => ({ posts: { ...st.posts, [story.id]: story }, postOrder: [story.id, ...st.postOrder] }))
+      scheduleGossipComments(story.id)
     }
 
     const config = state.settings.aiEnabled ? getProviderConfig(state.settings.activeProviderId) : undefined
-    const aiEligible = !!config && canSpend(config.id, config.rpdBudget)
-    if (!aiEligible) {
-      materializeCoveragePost(fallbackText, 'template')
+    if (!config || !canSpend(config.id, config.rpdBudget)) {
+      materializeStory(fallbackText, 'template')
       return
     }
 
     void generateMediaCoverage({
       npc: outlet,
-      description,
-      playerDisplayName: playerProfile.displayName,
+      description: facts,
+      playerDisplayName: subject.playerName,
       config,
     }).then((aiText) => {
       if (aiText) {
         recordSpend(config.id)
-        materializeCoveragePost(aiText, 'ai')
+        materializeStory(aiText, 'ai')
       } else {
-        materializeCoveragePost(fallbackText, 'template')
+        materializeStory(fallbackText, 'template')
       }
     })
   }
@@ -668,20 +765,34 @@ export const useGameStore = create<GameState>((set, get) => {
         followerDelta: outcome.followerDelta,
         relationshipChanges: [],
         reason: resolutionText,
+        details: {
+          summary: `${encounterText} You chose: "${choice.label}". ${resolutionText}`,
+          statReasons: explainStatDeltas(
+            outcome.tags,
+            outcome.statDeltas,
+            'event',
+            tier === 'good' ? 'The moment played well and won people over.' : tier === 'bad' ? 'It went badly and cost you some of your audience.' : 'Your audience shifted.',
+            outcome.followerDelta,
+            { tier },
+          ),
+          relationships: [],
+          signals: outcome.tags,
+          buzz: `${pickMediaOutlet(Object.values(get().profiles).filter(isNPC))?.displayName ?? 'The tabloids'} ran a story about this — look for it in the feed and in the comments around it.`,
+        },
       }
       set((s) => ({ activityLog: [...s.activityLog, logEntry], lastOutcomeReport: report }))
       advanceDay()
 
-      // A bad outcome can leak to the tabloids, same as a risky Activity —
-      // only when it's actually newsworthy (see coverageChance), never guaranteed.
-      if (outcome.tags.length > 0) {
-        const chance = coverageChance(outcome.tags, 3)
-        if (chance > 0 && rng() < chance) {
-          const npcs = Object.values(get().profiles).filter(isNPC)
-          const outlet = pickMediaOutlet(npcs)
-          if (outlet) triggerMediaCoverage(outlet, encounterText, outcome.tags)
-        }
-      }
+      // The tabloids run this one, whatever the outcome.
+      runGossip({
+        kind: 'event',
+        playerName: playerProfile.displayName,
+        detail: encounterText,
+        tags: outcome.tags,
+        others: [],
+        eventTier: tier,
+        eventMove: choice.label,
+      })
     }
 
     const config = state.settings.aiEnabled ? getProviderConfig(state.settings.activeProviderId) : undefined
@@ -912,7 +1023,8 @@ export const useGameStore = create<GameState>((set, get) => {
       // as the rest of the roster — reuses seedPostPool, no new content
       // needed. Commenter-tier people never author their own posts/stories.
       const pack = CAREER_PACKS[state.player.career]
-      const lines = isViewableProfile(npc) ? pack.seedPostPool[persona] : undefined
+      const lines =
+        isViewableProfile(npc) && persona !== 'tabloid' && persona !== 'insider' ? pack.seedPostPool[persona] : undefined
       let posts = state.posts
       let postOrder = state.postOrder
       if (lines && lines.length > 0) {
@@ -1207,17 +1319,30 @@ export const useGameStore = create<GameState>((set, get) => {
     // bump, so tagging people isn't purely cosmetic.
     const mentionedIds = extractMentionedIds(text, buildUsernameIndex(state.profiles))
     const relationshipChanges: RelationshipChangeSummary[] = []
+    const relationshipDetails: OutcomeDetails['relationships'] = []
     for (const npcId of mentionedIds) {
       const npc = updatedProfiles[npcId]
       if (npc && isNPC(npc)) {
+        const after = Math.min(100, npc.relationship + 2)
         updatedProfiles[npcId] = {
           ...npc,
-          relationship: Math.min(100, npc.relationship + 2),
+          relationship: after,
           lastRelationshipChange: { delta: 2, reason: 'You tagged them in a post.', at: now },
         }
         relationshipChanges.push({ npcId, delta: 2 })
+        relationshipDetails.push({
+          npcId,
+          delta: 2,
+          before: npc.relationship,
+          after,
+          reason: 'You tagged them in a post, which shows you were thinking of them.',
+        })
       }
     }
+
+    // Decided up front so the report card can say whether the tabloids ran it.
+    const tabloidRunsIt = tags.length > 0 || rng() < 0.6
+    const tabloidName = pickMediaOutlet(npcs)?.displayName
 
     const logEntry: ActivityLogEntry = {
       id: makeId('log'),
@@ -1236,6 +1361,23 @@ export const useGameStore = create<GameState>((set, get) => {
       relationshipChanges,
       reason: postReason,
       commentCount: commentItems.length,
+      details: {
+        summary: `You posted "${text.length > 90 ? `${text.slice(0, 90)}…` : text}". It pulled about ${result.engagement.likes.toLocaleString()} likes and ${result.engagement.reposts.toLocaleString()} reposts, and ${commentItems.length} ${commentItems.length === 1 ? 'person is' : 'people are'} replying.`,
+        statReasons: explainStatDeltas(
+          tags,
+          result.statDeltas,
+          'post',
+          `About ${result.engagement.likes.toLocaleString()} likes and ${result.engagement.reposts.toLocaleString()} reposts pulled in new followers${tags.some((t) => ['controversial', 'criticism', 'setback'].includes(t)) ? ', partly offset by the backlash' : ''}.`,
+          result.followerDelta,
+        ),
+        relationships: relationshipDetails,
+        signals: tags,
+        buzz: tabloidName
+          ? tabloidRunsIt
+            ? `${tabloidName} is running a story about this post — look for it in the feed and the comments on it.`
+            : `${tabloidName} didn't pick this one up.`
+          : undefined,
+      },
     }
 
     set({
@@ -1253,6 +1395,21 @@ export const useGameStore = create<GameState>((set, get) => {
     // still used for DMs' deliberate typing delay).
     processComments(commentItems)
     advanceDay()
+
+    // The tabloids pick up on most posts — always the newsworthy ones (a
+    // detected tag), and more often than not the rest.
+    if (tabloidRunsIt) {
+      runGossip({
+        kind: 'post',
+        playerName: playerProfile.displayName,
+        detail: text,
+        tags,
+        others: [...mentionedIds].flatMap((id) => {
+          const npc = updatedProfiles[id]
+          return npc && isNPC(npc) ? [npc.displayName] : []
+        }),
+      })
+    }
   },
 
   sendPlayerMessage: (npcId, text) => {
@@ -1390,7 +1547,8 @@ export const useGameStore = create<GameState>((set, get) => {
 
     set((state) => {
       const activity = state.activities[activityId]
-      if (!activity || activity.status !== 'active') return state
+      // Already on the closing beat — nothing more to play.
+      if (!activity || activity.status !== 'active' || activity.turnCount >= ACTIVITY_TURN_CAP) return state
       const msg: ActivityMessage = { id: makeId('msg'), from: 'player', text: trimmed, at: Date.now(), origin: 'player' }
       return {
         activities: {
@@ -1406,12 +1564,10 @@ export const useGameStore = create<GameState>((set, get) => {
     })
 
     const activity = get().activities[activityId]
-    if (!activity) return
-    if (activity.turnCount >= ACTIVITY_TURN_CAP) {
-      get().endActivity(activityId)
-      return
-    }
-    advanceActivity(activityId, false)
+    if (!activity || activity.messages.at(-1)?.text !== trimmed) return
+    // The last allowed turn still gets its narrator reaction — a closing
+    // beat that wraps the scene up — and the activity ends right after it.
+    advanceActivity(activityId, false, activity.turnCount >= ACTIVITY_TURN_CAP)
   },
 
   endActivity: (activityId) => {
@@ -1419,7 +1575,11 @@ export const useGameStore = create<GameState>((set, get) => {
     const activity = state.activities[activityId]
     if (!activity || activity.status === 'ended') return
 
+    // Only the people who actually showed up (see startActivity's RSVPs) take
+    // part in the result — a declined invite gains nothing and isn't in the
+    // tabloid story.
     const participants = activity.participantIds
+      .filter((id) => activity.rsvps?.[id] !== 'declined')
       .map((id) => state.profiles[id])
       .filter((p): p is NPC => !!p && isNPC(p))
     // Spending time together is inherently relationship-positive here —
@@ -1428,12 +1588,21 @@ export const useGameStore = create<GameState>((set, get) => {
     const relationshipDelta = Math.min(15, 5 + activity.turnCount * 2)
 
     const updatedProfiles = { ...state.profiles }
+    const activityRelationships: OutcomeDetails['relationships'] = []
     for (const npc of participants) {
+      const after = Math.max(-100, Math.min(100, npc.relationship + relationshipDelta))
       updatedProfiles[npc.id] = {
         ...npc,
-        relationship: Math.max(-100, Math.min(100, npc.relationship + relationshipDelta)),
+        relationship: after,
         lastRelationshipChange: { delta: relationshipDelta, reason: activity.description, at: Date.now() },
       }
+      activityRelationships.push({
+        npcId: npc.id,
+        delta: relationshipDelta,
+        before: npc.relationship,
+        after,
+        reason: `Spending ${activity.turnCount} ${activity.turnCount === 1 ? 'turn' : 'turns'} together on "${activity.description}" brings people closer (more turns, more effect — capped per activity).`,
+      })
     }
 
     const rng = mulberry32(hashStringToSeed(`${activityId}_end`))
@@ -1472,6 +1641,19 @@ export const useGameStore = create<GameState>((set, get) => {
       followerDelta,
       relationshipChanges: participants.map((npc) => ({ npcId: npc.id, delta: relationshipDelta })),
       reason: outcomeSummary,
+      details: {
+        summary: `${outcomeSummary} "${activity.description}" ran ${activity.turnCount} ${activity.turnCount === 1 ? 'turn' : 'turns'}${participants.length > 0 ? ` with ${participants.map((p) => p.displayName).join(' and ')}` : ''}.`,
+        statReasons: explainStatDeltas(
+          activity.tags,
+          statDeltas,
+          'activity',
+          `People heard about "${activity.description}" and it moved your audience.`,
+          followerDelta,
+        ),
+        relationships: activityRelationships,
+        signals: activity.tags,
+        buzz: `${pickMediaOutlet(Object.values(state.profiles).filter(isNPC))?.displayName ?? 'The tabloids'} ran a story about this — look for it in the feed and in the comments around it.`,
+      },
     }
 
     set({
@@ -1486,14 +1668,15 @@ export const useGameStore = create<GameState>((set, get) => {
     })
     advanceDay()
 
-    // Maybe the tabloids catch wind of it — only for activities that were
-    // actually newsworthy (see coverageChance), never guaranteed.
-    const chance = coverageChance(activity.tags, activity.turnCount)
-    if (chance > 0 && rng() < chance) {
-      const npcs = Object.values(get().profiles).filter(isNPC)
-      const outlet = pickMediaOutlet(npcs)
-      if (outlet) triggerMediaCoverage(outlet, activity.description, activity.tags, participants.map((p) => p.displayName))
-    }
+    // The tabloids always run the story of what the player got up to, and
+    // people comment on it.
+    runGossip({
+      kind: 'activity',
+      playerName: (state.profiles[PLAYER_ID] as Profile).displayName,
+      detail: activity.description,
+      tags: activity.tags,
+      others: participants.map((p) => p.displayName),
+    })
   },
 
   // Generates the situation with AI when configured (grounded in recent

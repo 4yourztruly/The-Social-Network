@@ -35,6 +35,11 @@ export interface CommentPayload {
   // lines. The deterministic `text` above is always computed regardless, as
   // the fallback when AI is off, unconfigured, over budget, or fails.
   aiEligible?: boolean
+  // Set on comments that are reacting to a tabloid/gossip story rather than
+  // to the parent post's own text — the fact sheet of what actually
+  // happened, so a comment on an unrelated post can still clearly refer to
+  // it (see engine/gossip.ts).
+  gossip?: string
   // If set, once this comment lands, schedule exactly one AI-eligible
   // reply to it from this other social-circle NPC — one level deep only,
   // never chained further. See runSocialCircleEngine.

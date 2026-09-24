@@ -25,6 +25,14 @@ function reactionPoolFor(pack: CareerPack, npc: NPC) {
   return npc.offTopic ? GENERIC_OFFTOPIC_REACTION_POOL : pack.reactionPool[npc.persona]
 }
 
+// Tabloid/insider accounts don't post generic filler ("you won't believe
+// this...") — everything they say is a specific story about something that
+// actually happened (see engine/gossip.ts), so they're left out of the
+// random seeded posts, stories and replies.
+export function isGenericPoster(npc: NPC): boolean {
+  return npc.persona !== 'tabloid' && npc.persona !== 'insider'
+}
+
 const PLAYER_ID = 'player'
 const GAME_START = Date.UTC(2026, 6, 1) // fixed epoch for in-game time
 
@@ -150,9 +158,9 @@ function seedPosts(
   // general public) still can't be followed/DMed or have a viewable
   // profile (see engine/npcTier.ts), but they post/comment/reply just
   // like everyone else.
-  const npcList = Object.values(npcs)
+  const npcList = Object.values(npcs).filter(isGenericPoster)
   const posts: Post[] = []
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count && npcList.length > 0; i++) {
     const author = pick(rng, npcList)
     const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
@@ -191,9 +199,9 @@ export function seedDailyPosts(
   orgForFlavor: string,
 ): Post[] {
   const now = Date.now()
-  const npcList = Object.values(npcs)
+  const npcList = Object.values(npcs).filter(isGenericPoster)
   const posts: Post[] = []
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count && npcList.length > 0; i++) {
     const author = pick(rng, npcList)
     const lines = postPoolFor(pack, author)
     if (!lines || lines.length === 0) continue
@@ -252,7 +260,7 @@ export function seedReplies(
   for (const parent of topLevelPosts) {
     if (parent.replies <= 0) continue
     const parentAuthor = npcs[parent.authorId]
-    const candidates = npcList.filter((n) => n.id !== parent.authorId)
+    const candidates = npcList.filter((n) => n.id !== parent.authorId && isGenericPoster(n))
     if (candidates.length === 0) continue
 
     // Decide who comments before generating any text: draws from the full
@@ -338,7 +346,7 @@ function seedStories(
   orgForFlavor: string,
 ): Post[] {
   const now = Date.now()
-  const npcList = Object.values(npcs).filter(isViewableProfile)
+  const npcList = Object.values(npcs).filter((n) => isViewableProfile(n) && isGenericPoster(n))
   const chosen = new Set<string>()
   const stories: Post[] = []
   for (let i = 0; i < count * 3 && chosen.size < count && chosen.size < npcList.length; i++) {
