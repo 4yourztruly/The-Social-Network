@@ -25,7 +25,7 @@ export default defineConfig({
         description: 'A social-media life sim for a professional footballer.',
         theme_color: '#0f172a',
         background_color: '#0f172a',
-        display: 'fullscreen',
+        display: 'standalone',
         // Relative, not absolute — resolved against `base` above, so this
         // still works whether the app is served from / or /The-Social-Network/.
         start_url: '.',
@@ -37,14 +37,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webp,ico}'],
-        // Explicit rather than relying on registerType:'autoUpdate' to
-        // imply these — a new SW should take control immediately rather
-        // than waiting for every tab to close first, and stale precache
-        // entries from old builds should never linger once a new one has
-        // activated.
-        skipWaiting: true,
-        clientsClaim: true,
-        cleanupOutdatedCaches: true,
       },
     }),
   ],

@@ -25,7 +25,7 @@ export function AddStory({ onBack, onPosted }: AddStoryProps) {
   if (!player) return null
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[100] flex h-dvh justify-center bg-black">
+    <div className="fixed inset-0 z-[100] flex justify-center bg-black">
       <div
         className="relative flex h-full w-full max-w-xl flex-col text-white"
         style={{
