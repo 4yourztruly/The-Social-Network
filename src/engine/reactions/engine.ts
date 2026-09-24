@@ -15,6 +15,8 @@ import type { Engagement } from '../formulas'
 import { CROSS_MENTION_BANTER_LINES, PLAYER_MENTION_BANTER_LINES, fillBanterTarget } from '../banter'
 import { GENERIC_OFFTOPIC_REACTION_POOL } from '../../content/genericFiller'
 import { relatedComment } from '../specificContent'
+import { reactionStance, stanceLine, type Stance } from '../interest'
+import { tierForPersona } from '../npcTier'
 
 // An offTopic NPC (a real celeb the AI picked for variety, unrelated to
 // this career's world) never draws from this pack's sport/industry-flavored
@@ -41,6 +43,9 @@ export interface CommentPayload {
   // happened, so a comment on an unrelated post can still clearly refer to
   // it (see engine/gossip.ts).
   gossip?: string
+  // How this person relates to what's being commented on (a rival, a fan, a
+  // neutral) — tells the AI who they are in this moment. See engine/interest.ts.
+  stance?: Stance
   // If set, once this comment lands, schedule exactly one AI-eligible
   // reply to it from this other social-circle NPC — one level deep only,
   // never chained further. See runSocialCircleEngine.
@@ -145,7 +150,16 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
 
   const eligiblePersonas = new Set(eligiblePersonasForTags(event.tags))
   const candidates = npcs.filter((n) => eligiblePersonas.has(n.persona))
-  const pool = candidates.length > 0 ? candidates : npcs
+  let pool = candidates.length > 0 ? candidates : npcs
+
+  // Only people who'd actually react to THIS post: a Barcelona player doesn't
+  // chant "Hala Madrid", someone who doesn't follow football scrolls past.
+  const stanceOf = new Map<string, Stance>()
+  if (postText) {
+    for (const n of pool) stanceOf.set(n.id, reactionStance(n, postText))
+    const interested = pool.filter((n) => stanceOf.get(n.id) !== 'skip')
+    pool = interested.length >= 3 ? interested : npcs.filter((n) => tierForPersona(n.persona) === 'commenter')
+  }
 
   const commentCount = pool.length > 0 ? commentCountForPost(rng, playerSocialScore) : 0
 
@@ -162,7 +176,11 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
 
     const filled = fillTemplate(selection.line, { player: playerDisplayName, org: orgName })
     let text = applyPersonalityVoice(filled, npc, rng)
-    if (postText && rng() < 0.45) {
+    const stance = stanceOf.get(npc.id)
+    const stanced = postText && stance ? stanceLine(rng, stance, npc, postText) : null
+    if (stanced) {
+      text = applyPersonalityVoice(stanced, npc, rng)
+    } else if (postText && rng() < 0.45) {
       const related = relatedComment(rng, postText, playerDisplayName, npc.persona)
       if (related) text = applyPersonalityVoice(related, npc, rng)
     }
@@ -172,7 +190,7 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
       id: makeId('sched'),
       dueAt,
       kind: 'comment',
-      payload: { parentPostId: postId, npcId: npc.id, text, tags: event.tags, aiEligible: true },
+      payload: { parentPostId: postId, npcId: npc.id, text, tags: event.tags, aiEligible: true, stance },
     })
     commenterNpcs.push(npc)
   }
@@ -217,6 +235,7 @@ export interface SocialCircleArgs {
   reactionPool: Record<Persona, ReactionPool>
   orgName: string
   playerDisplayName: string
+  postText?: string
   rng: RNG
   now: number
 }
@@ -233,8 +252,12 @@ export interface SocialCircleOutcome {
 // See PROJECT_SPEC.md section 8 for the "gameplay never blocks on AI" rule
 // this still has to honor: every line here has a deterministic fallback.
 export function runSocialCircleEngine(args: SocialCircleArgs): SocialCircleOutcome {
-  const { event, postId, circleNpcs, oddCelebrity, reactionPool, orgName, playerDisplayName, rng, now } = args
-  const commenters = oddCelebrity ? [...circleNpcs, oddCelebrity] : circleNpcs
+  const { event, postId, circleNpcs, oddCelebrity, reactionPool, orgName, playerDisplayName, postText, rng, now } = args
+  const everyone = oddCelebrity ? [...circleNpcs, oddCelebrity] : circleNpcs
+  // Being in the player's circle doesn't mean caring about every post.
+  const circleStance = new Map<string, Stance>()
+  if (postText) for (const n of everyone) circleStance.set(n.id, reactionStance(n, postText))
+  const commenters = postText ? everyone.filter((n) => circleStance.get(n.id) !== 'skip') : everyone
   if (commenters.length === 0) return { scheduledItems: [], npcLineUpdates: {} }
 
   const scheduledItems: ScheduledCommentItem[] = []
@@ -247,14 +270,16 @@ export function runSocialCircleEngine(args: SocialCircleArgs): SocialCircleOutco
     npcLineUpdates[npc.id] = pushRecentLine(recentLineIds, selection.lineId)
 
     const filled = fillTemplate(selection.line, { player: playerDisplayName, org: orgName })
-    const text = applyPersonalityVoice(filled, npc, rng)
+    const stance = circleStance.get(npc.id)
+    const stanced = postText && stance ? stanceLine(rng, stance, npc, postText) : null
+    const text = applyPersonalityVoice(stanced ?? filled, npc, rng)
     const dueAt = now + randomInt(rng, COMMENT_DELAY_RANGE_MS[0], COMMENT_DELAY_RANGE_MS[1])
 
     scheduledItems.push({
       id: makeId('sched'),
       dueAt,
       kind: 'comment',
-      payload: { parentPostId: postId, npcId: npc.id, text, tags: event.tags, aiEligible: true },
+      payload: { parentPostId: postId, npcId: npc.id, text, tags: event.tags, aiEligible: true, stance },
     })
   }
 

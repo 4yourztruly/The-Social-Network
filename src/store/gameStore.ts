@@ -43,6 +43,7 @@ import { resolvePublicity } from '../engine/publicity'
 import type { WorldStory } from '../types'
 import { fetchWikipediaFacts } from '../engine/wikiFacts'
 import { padCelebs } from '../content/celebPool'
+import { reactionStance } from '../engine/interest'
 import { registerMemorySource } from '../engine/npcMemory'
 import { acknowledgementPost, secretPost, specificCelebPost } from '../engine/specificContent'
 import { makeId } from '../engine/id'
@@ -348,7 +349,12 @@ export const useGameStore = create<GameState>((set, get) => {
     const plan: PlannedComment[] = []
     const chunkStarts: number[] = []
     for (const parent of parents) {
-      const eligible = pool.filter((c) => c.id !== parent.authorId).sort(() => rng() - 0.5)
+      const notAuthor = pool.filter((c) => c.id !== parent.authorId)
+      // Only people who'd genuinely react to this — see engine/interest.ts.
+      const interested = notAuthor.filter((c) => reactionStance(c, parent.text) !== 'skip')
+      const eligible = (interested.length >= 3 ? interested : notAuthor.filter((c) => tierForPersona(c.persona) === 'commenter')).sort(
+        () => rng() - 0.5,
+      )
       if (eligible.length === 0) continue
       const n = Math.max(1, countFor(parent))
       const base = plan.length
@@ -385,6 +391,7 @@ export const useGameStore = create<GameState>((set, get) => {
           targetIsPlayer: parent.authorId === PLAYER_ID,
           targetIsReply: false,
           parentItem: replyTo === undefined ? undefined : replyTo - start,
+          stance: reactionStance(npc, parent.text),
         })),
         playerDisplayName: playerProfile.displayName,
         orgName: state.player.club || pack.worldName,
@@ -1027,6 +1034,7 @@ export const useGameStore = create<GameState>((set, get) => {
         targetAuthorName: targetAuthor?.displayName ?? 'someone',
         targetIsPlayer: target?.authorId === PLAYER_ID,
         targetIsReply: target?.kind === 'reply',
+        stance: item.payload.stance,
         newsFacts: item.payload.gossip,
       }
     })
@@ -2040,6 +2048,7 @@ export const useGameStore = create<GameState>((set, get) => {
       reactionPool: pack.reactionPool,
       orgName: state.player.club || pack.worldName,
       playerDisplayName: playerProfile.displayName,
+      postText: text,
       rng,
       now,
     })

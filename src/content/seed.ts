@@ -7,6 +7,7 @@ import { isViewableProfile, tierForPersona } from '../engine/npcTier'
 import { pushRecentLine, selectLine, selectPlainLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
 import { relatedComment, specificCelebPost } from '../engine/specificContent'
+import { reactionStance, stanceLine } from '../engine/interest'
 import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
 import { GENERIC_OFFTOPIC_POSTS, GENERIC_OFFTOPIC_REACTION_POOL } from './genericFiller'
 import { estimateEngagement, estimateReplyEngagement, storyCommentCount } from '../engine/formulas'
@@ -373,7 +374,10 @@ export function seedReplies(
     const parentAuthor = npcs[parent.authorId]
     // The player isn't in the NPC record, but their posts/stories get comments too.
     const parentName = parentAuthor?.displayName ?? (parent.authorId === 'player' ? 'you' : '')
-    const candidates = npcList.filter((n) => n.id !== parent.authorId && isGenericPoster(n))
+    const allCandidates = npcList.filter((n) => n.id !== parent.authorId && isGenericPoster(n))
+    // Only people who'd actually react to this post.
+    const interested = allCandidates.filter((n) => reactionStance(n, parent.text) !== 'skip')
+    const candidates = interested.length >= 3 ? interested : allCandidates.filter((n) => tierForPersona(n.persona) === 'commenter')
     if (candidates.length === 0) continue
 
     // Decide who comments before generating any text: draws from the full
@@ -409,7 +413,9 @@ export function seedReplies(
         mentionsLeft -= 1
       } else {
         // Most comments answer what the post is actually about.
-        const related = rng() < 0.8 ? relatedComment(rng, parent.text, parentName, commenter.persona) : null
+        const stance = reactionStance(commenter, parent.text)
+        const stanced = stanceLine(rng, stance, commenter, parent.text)
+        const related = stanced ?? (rng() < 0.8 ? relatedComment(rng, parent.text, parentName, commenter.persona) : null)
         const relatedText = related ? applyPersonalityVoice(related, commenter, rng) : null
         if (relatedText && !avoidTexts.has(relatedText)) {
           text = relatedText
