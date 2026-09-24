@@ -4,7 +4,8 @@ export type NpcTier = 'celeb' | 'commenter' | 'media'
 
 // Three tiers of "people" in the world, per persona:
 //  - celeb: named individuals with a real relationship to the player —
-//    teammate/coach/agent/rival. Followable, DMable (once they follow back),
+//    celebrities the player added to their universe (plus any legacy
+//    teammate/coach/agent/rival from older saves). Followable, DMable (once they follow back),
 //    have a viewable profile with a relationship bar, and author their own
 //    posts/stories.
 //  - commenter: the general public — loyal_fan/hater/meme_account. They only
@@ -24,6 +25,7 @@ const TIER_BY_PERSONA: Record<Persona, NpcTier> = {
   match_reporter: 'media',
   insider: 'media',
   tabloid: 'media',
+  celebrity: 'celeb',
 }
 
 export function tierForPersona(persona: Persona): NpcTier {

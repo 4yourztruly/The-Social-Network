@@ -18,8 +18,8 @@ describe('inferPersonaFromBio', () => {
     expect(inferPersonaFromBio('Gossip Girl', '')).toBe('tabloid')
   })
 
-  it('falls back to loyal_fan when nothing matches', () => {
-    expect(inferPersonaFromBio('Jamie', 'My best friend from school')).toBe('loyal_fan')
+  it('falls back to celebrity when nothing matches', () => {
+    expect(inferPersonaFromBio('Jamie', 'My best friend from school')).toBe('celebrity')
   })
 
   it('is case-insensitive', () => {

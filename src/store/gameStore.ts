@@ -34,6 +34,8 @@ import { CAREER_PACKS } from '../content/careers'
 import type { NPCSeed } from '../content/careers/types'
 import { buildFallbackRoster } from '../content/rosterFallback'
 import { generateRoster } from '../ai/rosterService'
+import { buildCelebSeeds } from '../ai/celebSeedService'
+import { buildFixedMediaSeeds } from '../content/universe'
 import { generateAiSeedPost } from '../ai/seedContentService'
 import { isNPC } from '../types'
 import { makeId } from '../engine/id'
@@ -239,9 +241,10 @@ export interface CreateActivityInput {
 function buildInitialState(input: OnboardingInput, npcSeeds?: NPCSeed[]) {
   const pack = CAREER_PACKS[input.career]
   const world = createSeededWorld(pack, input, Date.now(), npcSeeds)
-  // Start the player following the org's own teammates + coach/mentor by default.
+  // Start the player following the celebrities they added to their universe
+  // (and, for older saves' worlds, the org's own teammates + coach).
   for (const profile of Object.values(world.profiles)) {
-    if (isNPC(profile) && (profile.persona === 'teammate' || profile.persona === 'coach')) {
+    if (isNPC(profile) && (profile.persona === 'celebrity' || profile.persona === 'teammate' || profile.persona === 'coach')) {
       profile.followedByPlayer = true
     }
   }
@@ -732,18 +735,27 @@ export const useGameStore = create<GameState>((set, get) => {
     const config = configs[0]
     const aiEligible = !!config && canSpend(config.id, config.rpdBudget)
 
-    let npcSeeds: NPCSeed[] | undefined
-    if (aiEligible) {
-      const generated = await generateRoster({ input, pack, config })
+    // Every universe: the fixed news/tabloid outlets (CNN, Sky Sports, TMZ),
+    // the celebrities the player added at onboarding (no predetermined
+    // teammate/coach/etc roles), and the everyday public (fans/haters/memes)
+    // from AI or the deterministic fallback.
+    const rng = mulberry32(hashStringToSeed(`${input.username}_roster`))
+    const usedUsernames = new Set<string>()
+    const mediaSeeds = buildFixedMediaSeeds(rng)
+    for (const m of mediaSeeds) usedUsernames.add(m.username)
+    const celebSeeds = await buildCelebSeeds(input.celebs ?? [], aiEligible ? config : undefined, rng, usedUsernames)
+    const celebAvatarPool = celebSeeds.flatMap((c) => (c.avatar?.kind === 'webp' ? [c.avatar.value] : []))
+
+    let commenterSeeds: NPCSeed[] | undefined
+    if (aiEligible && canSpend(config.id, config.rpdBudget)) {
+      const generated = await generateRoster({ input, pack, config, celebAvatarPool, usedUsernames })
       if (generated) {
         recordSpend(config.id)
-        npcSeeds = generated
+        commenterSeeds = generated
       }
     }
-    if (!npcSeeds) {
-      const rng = mulberry32(hashStringToSeed(`${input.username}_roster`))
-      npcSeeds = buildFallbackRoster(pack, input, rng)
-    }
+    if (!commenterSeeds) commenterSeeds = buildFallbackRoster(pack, input, rng, usedUsernames, celebAvatarPool)
+    const npcSeeds: NPCSeed[] = [...mediaSeeds, ...celebSeeds, ...commenterSeeds]
 
     const world = buildInitialState(input, npcSeeds)
 
@@ -886,6 +898,9 @@ export const useGameStore = create<GameState>((set, get) => {
       // UI either.
       followedByPlayer: tierForPersona(persona) === 'celeb',
       custom: true,
+      // A roleless celebrity is just themselves — never the career pack's
+      // sport/industry lines.
+      offTopic: persona === 'celebrity' ? true : undefined,
     }
 
     set((state) => {
@@ -1607,6 +1622,17 @@ export const useGameStore = create<GameState>((set, get) => {
     set((state) => ({ worldSettings: { ...state.worldSettings, ...patch } })),
 
   hydrateFromSave: (save) => {
+    // The universe no longer has predetermined roles: an older save's
+    // teammate/coach/agent/rival becomes a plain celebrity who speaks in
+    // career-agnostic (or AI, in-character) voice instead of the sport pool.
+    const LEGACY_ROLES: NPC['persona'][] = ['teammate', 'coach', 'agent', 'rival']
+    const profiles: typeof save.profiles = {}
+    for (const [id, profile] of Object.entries(save.profiles)) {
+      profiles[id] =
+        isNPC(profile) && LEGACY_ROLES.includes(profile.persona)
+          ? { ...profile, persona: 'celebrity', offTopic: true, vibe: 'friend' }
+          : profile
+    }
     // Replies saved before replies were guaranteed engagement (or created by
     // paths that never gave them any) sit at 0 likes — backfill them once,
     // deterministically per reply id, so they look like the rest.
@@ -1615,7 +1641,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (post.kind === 'reply' && post.likes === 0 && post.reposts === 0) {
         const engagement = estimateReplyEngagement(
           mulberry32(hashStringToSeed(`${id}_engagement`)),
-          save.profiles[post.authorId]?.followers ?? 0,
+          profiles[post.authorId]?.followers ?? 0,
           (save.player.humor + save.player.aura) / 2,
         )
         posts[id] = { ...post, likes: engagement.likes, reposts: engagement.reposts }
@@ -1635,7 +1661,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (commentless.length > 0) {
       const pack = CAREER_PACKS[save.player.career]
       const npcRecord: Record<string, NPC> = {}
-      for (const p of Object.values(save.profiles)) if (isNPC(p)) npcRecord[p.id] = p
+      for (const p of Object.values(profiles)) if (isNPC(p)) npcRecord[p.id] = p
       const rng = mulberry32(hashStringToSeed(`story_backfill_${save.clock}_${commentless.length}`))
       const withCounts = commentless.map((s) => ({
         ...s,
@@ -1649,7 +1675,7 @@ export const useGameStore = create<GameState>((set, get) => {
       clock: save.clock,
       gameDay: save.gameDay ?? 1,
       player: save.player,
-      profiles: save.profiles,
+      profiles,
       posts,
       postOrder: Object.values(posts)
         .sort((a, b) => b.createdAt - a.createdAt)

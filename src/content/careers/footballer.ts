@@ -1,9 +1,9 @@
-import type { CareerPack } from './types'
+import type { CareerPackDef } from './types'
 
 const WORLD = 'Ashcombe United'
 const RIVAL = 'Duncastle Rovers'
 
-export const footballerPack: CareerPack = {
+export const footballerPack: CareerPackDef = {
   id: 'footballer',
   label: 'Footballer',
   emoji: '⚽',

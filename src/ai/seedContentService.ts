@@ -13,12 +13,20 @@ const MAX_POST_CHARS = 220
 // the rest of the AI integration uses. See gameStore.completeOnboarding.
 export function buildSeedPostSystemPrompt(npc: NPC, orgName: string): string {
   const traits = npc.personality.length > 0 ? npc.personality.join(', ') : 'even-tempered'
+  // A celebrity the player added is just themselves — never part of the
+  // player's career world, so the world/org isn't even mentioned to them.
+  const independent = npc.persona === 'celebrity' || npc.offTopic
   return [
-    `You are roleplaying as the account @${npc.username}, display name "${npc.displayName}", in a social-media life sim game about the world of ${orgName}.`,
+    independent
+      ? `You are roleplaying as the account @${npc.username}, display name "${npc.displayName}", in a social-media life sim game.`
+      : `You are roleplaying as the account @${npc.username}, display name "${npc.displayName}", in a social-media life sim game about the world of ${orgName}.`,
     npc.bio
       ? `Who they actually are, in their own words (source of truth for voice, vocation and interests): "${npc.bio}"`
       : '',
     `Personality traits: ${traits}.`,
+    independent
+      ? `They have nothing to do with ${orgName} or the player's career — post only about their OWN life, work, interests and mood, never about sport, a club, or anyone's career unless their own bio says that's their thing.`
+      : '',
     'Write ONE short, standalone public post in their own authentic voice — about their own life, work, mood, or something on their mind right now. Not a reply to anyone, and not about any specific other person.',
     '1 short sentence, casual social-media tone, no more than 200 characters. An emoji or hashtag is fine if it fits their style, not required.',
     'Stay fully in character. Never mention being an AI, a model, or a game character.',

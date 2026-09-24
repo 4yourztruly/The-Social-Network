@@ -14,6 +14,7 @@ export const personaSchema = z.enum([
   'match_reporter',
   'insider',
   'tabloid',
+  'celebrity',
 ])
 
 export const npcSeedSchema = z.object({

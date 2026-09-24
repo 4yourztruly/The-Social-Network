@@ -1,9 +1,9 @@
-import type { CareerPack } from './types'
+import type { CareerPackDef } from './types'
 
 const WORLD = 'Ironhaven Miners'
 const RIVAL = 'Cascade City Tide'
 
-export const baseballPack: CareerPack = {
+export const baseballPack: CareerPackDef = {
   id: 'baseball_player',
   label: 'Baseball Player',
   emoji: '⚾',

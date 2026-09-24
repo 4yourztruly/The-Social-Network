@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { mulberry32 } from './rng'
 import { generateDmReply } from './dm'
-import { footballerPack } from '../content/careers/footballer'
+import { CAREER_PACKS } from '../content/careers'
+
+const footballerPack = CAREER_PACKS.footballer
 import type { NPC } from '../types'
 
 function makeNpc(overrides: Partial<NPC>): NPC {

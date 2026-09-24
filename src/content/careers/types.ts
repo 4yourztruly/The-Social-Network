@@ -33,6 +33,16 @@ export type NPCSeed = Pick<
   offTopic?: NPC['offTopic']
 }
 
+// What a career pack file authors: line pools for the role personas only.
+// `celebrity` is career-agnostic by design, so it's filled in centrally
+// (see careers/index.ts) instead of being hand-written per career.
+export type RolePersona = Exclude<Persona, 'celebrity'>
+
+export interface CareerPackDef extends Omit<CareerPack, 'seedPostPool' | 'reactionPool'> {
+  seedPostPool: Record<RolePersona, string[]>
+  reactionPool: Record<RolePersona, ReactionPool>
+}
+
 export interface CareerPack {
   id: 'footballer' | 'rapper' | 'singer' | 'baseball_player'
   label: string // "Footballer"

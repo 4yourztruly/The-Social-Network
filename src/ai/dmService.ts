@@ -18,6 +18,9 @@ export function buildDmSystemPrompt(npc: NPC, playerDisplayName: string, orgName
       ? `Who they actually are, in their own words (this is the source of truth for their voice, vocation, and interests — NOT the game-mechanic label below): "${npc.bio}"`
       : '',
     `Game-mechanic label only (determines follow/DM rules, not who they are): "${npc.persona.replace('_', ' ')}". Personality traits: ${traits}.`,
+    npc.persona === 'celebrity'
+      ? `They are an independent public figure, not part of the player's team, club or career world — they have no role in it. Talk exactly like this real person would (their own vocation, interests, humor and voice); never like a coach, teammate, agent or football/industry insider.`
+      : '',
     npc.bio
       ? "If their bio describes a real person unrelated to football (an actor, musician, athlete in another sport, etc.), talk like THAT person would — their real vocation, interests and voice — not like a footballer or football-world insider. Only lean into football-world framing if their bio actually puts them in that world."
       : '',

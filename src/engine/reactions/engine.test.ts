@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { mulberry32 } from '../rng'
 import { createGameEvent } from '../events'
 import { runReactionEngine, runSocialCircleEngine } from './engine'
-import { footballerPack } from '../../content/careers/footballer'
+import { CAREER_PACKS } from '../../content/careers'
+
+const footballerPack = CAREER_PACKS.footballer
 import type { NPC } from '../../types'
 
 function makeNpc(overrides: Partial<NPC>): NPC {

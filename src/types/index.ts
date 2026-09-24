@@ -11,6 +11,11 @@ export type Persona =
   | 'match_reporter'
   | 'insider'
   | 'tabloid'
+  // A real (or invented) public figure the player added to their universe —
+  // deliberately NOT a game role (no teammate/coach/agent/rival): they're
+  // just themselves, post in their own voice, and aren't tied to the
+  // player's career. Celeb tier (followable, DMable once they follow back).
+  | 'celebrity'
 
 export interface Avatar {
   kind: 'initials' | 'svg' | 'webp'

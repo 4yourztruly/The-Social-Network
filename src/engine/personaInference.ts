@@ -7,7 +7,8 @@ import type { Persona } from '../types'
 // news" makes them post/react like the rest of the tabloid roster, without
 // an AI call (deterministic, instant, always available — same "gameplay
 // never blocks on AI" rule as everywhere else). Checked in priority order;
-// first match wins. Falls back to 'loyal_fan', the safest generic default.
+// first match wins. Falls back to 'celebrity' — a person the player added with no obvious
+// role is just themselves, not a predetermined game role.
 const PERSONA_KEYWORDS: { persona: Persona; keywords: string[] }[] = [
   {
     persona: 'tabloid',
@@ -31,5 +32,5 @@ export function inferPersonaFromBio(name: string, bio: string): Persona {
   for (const { persona, keywords } of PERSONA_KEYWORDS) {
     if (keywords.some((k) => text.includes(k))) return persona
   }
-  return 'loyal_fan'
+  return 'celebrity'
 }

@@ -2,7 +2,7 @@ import type { CareerPack, NPCSeed } from './careers/types'
 import type { OnboardingInput } from './seed'
 import { pick, randomInt, type RNG } from '../engine/rng'
 import { dedupe, makeId } from '../engine/id'
-import { crestAvatarUrl, dicebearAvatarUrl, pickNpcAvatarUrl } from '../engine/avatarSource'
+import { crestAvatarUrl, pickNpcAvatarUrl } from '../engine/avatarSource'
 
 // Deterministic, non-AI roster — used when the player hasn't configured an
 // AI provider, or when AI roster generation fails/times out (see
@@ -19,8 +19,6 @@ const LAST_NAMES = [
   'Larkspur', 'Whitlock', 'Rourke', 'Santoro', 'Iversen', 'Cade', 'Monroe', 'Blackwood', 'Faraday', 'Solis',
 ]
 const MEME_NAMES = ['Daily Meme Vault', 'Locker Room Leaks', 'Unofficial Highlights', 'Chaos Timeline']
-const NEWS_TEMPLATES = ['{org} Daily', 'The {org} Wire', '{org} Report', 'Inside {org}']
-const TABLOID_TEMPLATES = ['The Velvet Rope', 'Backstage Files', 'After Hours Report', 'The Insider Scoop']
 
 function randomName(rng: RNG): { first: string; last: string } {
   return { first: pick(rng, FIRST_NAMES), last: pick(rng, LAST_NAMES) }
@@ -56,94 +54,23 @@ function makeSeed(partial: Omit<NPCSeed, 'id' | 'postingStyle'>, rng: RNG): NPCS
   }
 }
 
-export function buildFallbackRoster(pack: CareerPack, input: OnboardingInput, rng: RNG): NPCSeed[] {
+// Only the everyday public — fans, haters and meme accounts. The news
+// outlets/tabloid are fixed (see content/universe.ts) and celebrities are
+// added by the player, so neither is generated here.
+export function buildFallbackRoster(
+  pack: CareerPack,
+  input: OnboardingInput,
+  rng: RNG,
+  // Usernames (and therefore most avatar URLs, which are seeded by
+  // username) must be unique across the WHOLE roster — shared with the
+  // fixed media and the player's celebs so nothing collides.
+  usedUsernames: Set<string> = new Set(),
+  // Pictures of the player's celebs, so a fan account can plausibly use one
+  // as "who they're a fan of".
+  celebAvatarUrls: string[] = [],
+): NPCSeed[] {
   const orgForFlavor = input.org || pack.worldName
   const npcs: NPCSeed[] = []
-  // Usernames (and therefore most avatar URLs, which are seeded by
-  // username) must be unique across the WHOLE roster, not just within one
-  // persona group — a celeb and a commenter can otherwise land on the same
-  // handle by chance, producing identical pictures.
-  const usedUsernames = new Set<string>()
-
-  // Celebs first — nobody in the fallback pool is real, so these stay
-  // illustrated portraits (there's no photo to fetch), but building them
-  // first means fan-account NPCs below can plausibly use one as "who
-  // they're a fan of".
-  const celebPersonas: NPCSeed['persona'][] = ['teammate', 'coach', 'agent', 'rival']
-  const celebAvatarUrls: string[] = []
-  for (let i = 0; i < 8; i++) {
-    const persona = celebPersonas[i % celebPersonas.length]
-    const { first, last } = randomName(rng)
-    const displayName = `${first} ${last}`
-    const username = dedupe(randomHandle(first, last, rng), usedUsernames)
-    const avatarUrl = dicebearAvatarUrl(username)
-    celebAvatarUrls.push(avatarUrl)
-    const bioByPersona: Record<string, string> = {
-      teammate: `${input.role || pack.roleOptions[0]} @ ${orgForFlavor}.`,
-      coach: `Manager, ${orgForFlavor}. Results business.`,
-      agent: 'Deals, not drama. (mostly)',
-      rival: `${input.role || pack.roleOptions[0]}, elsewhere. Not sorry.`,
-    }
-    npcs.push(
-      makeSeed(
-        {
-          username,
-          displayName,
-          bio: bioByPersona[persona],
-          persona,
-          personality: persona === 'rival' ? ['cocky', 'sarcastic'] : ['confident', 'driven'],
-          verified: true,
-          followers: randomInt(rng, 150_000, 4_000_000),
-          following: randomInt(rng, 50, 900),
-          avatar: { kind: 'webp', value: avatarUrl },
-        },
-        rng,
-      ),
-    )
-  }
-
-  for (let i = 0; i < 2; i++) {
-    const template = pick(rng, NEWS_TEMPLATES)
-    const name = template.replace('{org}', orgForFlavor)
-    const username = dedupe(slug(name, String(i)), usedUsernames)
-    npcs.push(
-      makeSeed(
-        {
-          username,
-          displayName: name,
-          bio: `Covering ${orgForFlavor} and the wider ${pack.label.toLowerCase()} world.`,
-          persona: 'match_reporter',
-          personality: ['measured', 'thorough'],
-          verified: true,
-          followers: randomInt(rng, 80_000, 900_000),
-          following: randomInt(rng, 200, 900),
-          avatar: { kind: 'webp', value: crestAvatarUrl(username) },
-        },
-        rng,
-      ),
-    )
-  }
-
-  for (let i = 0; i < 2; i++) {
-    const name = TABLOID_TEMPLATES[i % TABLOID_TEMPLATES.length]
-    const username = dedupe(slug(name, String(i)), usedUsernames)
-    npcs.push(
-      makeSeed(
-        {
-          username,
-          displayName: name,
-          bio: 'Rumours, gossip, and whatever nobody wanted printed.',
-          persona: 'tabloid',
-          personality: ['nosy', 'gleeful'],
-          verified: true,
-          followers: randomInt(rng, 100_000, 1_500_000),
-          following: randomInt(rng, 10, 60),
-          avatar: { kind: 'webp', value: crestAvatarUrl(username) },
-        },
-        rng,
-      ),
-    )
-  }
 
   const commenterPersonas: NPCSeed['persona'][] = ['loyal_fan', 'hater', 'meme_account']
   for (let i = 0; i < 12; i++) {

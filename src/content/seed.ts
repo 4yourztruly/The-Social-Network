@@ -35,6 +35,8 @@ export interface OnboardingInput {
   bio?: string
   role: string // '' if the player never said what they play/do
   org: string // '' if the player never named a club/label/team
+  // Celebrities the player added at onboarding ("Customize your universe").
+  celebs?: { name: string; description?: string }[]
 }
 
 export function createPlayerProfile(pack: CareerPack, input: OnboardingInput): Profile {
@@ -81,6 +83,7 @@ const DEFAULT_VIBE_BY_PERSONA: Record<NPC['persona'], RelationshipVibe> = {
   match_reporter: 'fan',
   insider: 'fan',
   tabloid: 'frenemy',
+  celebrity: 'friend',
 }
 
 export function defaultVibeForPersona(persona: NPC['persona']): RelationshipVibe {

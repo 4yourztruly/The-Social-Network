@@ -4,6 +4,9 @@ import { CAREER_PACKS } from '../../content/careers'
 import { extractOrgFromBio, extractRoleFromBio, inferCareerFromBio } from '../../engine/careerInference'
 import { AIProviderSetup } from '../../components/AIProviderSetup'
 import { loadProviderConfigs } from '../../ai/keyStorage'
+import { FIXED_MEDIA, type CelebInput } from '../../content/universe'
+
+const MAX_CELEBS = 20
 
 type Step = 'ai-choice' | 'ai-setup' | 'profile'
 
@@ -18,6 +21,11 @@ export function Onboarding() {
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // "Customize your universe" — celebs the player wants in their world, each
+  // with an optional description of their personality.
+  const [celebs, setCelebs] = useState<CelebInput[]>([])
+  const [celebName, setCelebName] = useState('')
+  const [celebDescription, setCelebDescription] = useState('')
 
   const career = useMemo(() => inferCareerFromBio(bio), [bio])
   const pack = CAREER_PACKS[career]
@@ -40,12 +48,22 @@ export function Onboarding() {
         bio: bio.trim(),
         role: role ?? '',
         org: org ?? '',
+        celebs,
       })
     } finally {
       // Only matters if completeOnboarding throws — on success this screen
       // unmounts before the reset would ever be seen.
       setSubmitting(false)
     }
+  }
+
+  const handleAddCeleb = () => {
+    const name = celebName.trim()
+    if (!name || celebs.length >= MAX_CELEBS) return
+    if (celebs.some((c) => c.name.toLowerCase() === name.toLowerCase())) return
+    setCelebs((prev) => [...prev, { name, description: celebDescription.trim() || undefined }])
+    setCelebName('')
+    setCelebDescription('')
   }
 
   if (step === 'ai-choice') {
@@ -187,6 +205,74 @@ export function Onboarding() {
             ) : (
               <span className="text-neutral-500">Keep writing — your world will show up here.</span>
             )}
+          </div>
+
+          <div className="rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+            <h2 className="text-sm font-semibold">Customize your universe</h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              Add the celebrities you want in your world. Everyone is just themselves — no teammates or coaches
+              unless you add them. The news and the tabloid are always the same.
+            </p>
+
+            <p className="mt-3 text-xs font-semibold text-neutral-500">Always in every universe</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {FIXED_MEDIA.map((m) => (
+                <span
+                  key={m.username}
+                  className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+                >
+                  {m.displayName}
+                  <span className="ml-1 text-neutral-400">{m.persona === 'tabloid' ? 'tabloid' : 'news'}</span>
+                </span>
+              ))}
+            </div>
+
+            <p className="mt-4 text-xs font-semibold text-neutral-500">Your celebs</p>
+            {celebs.length > 0 && (
+              <ul className="mt-1.5 flex flex-col gap-1.5">
+                {celebs.map((c) => (
+                  <li
+                    key={c.name}
+                    className="flex items-start justify-between gap-2 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-800"
+                  >
+                    <span className="min-w-0 text-sm">
+                      <span className="font-semibold">{c.name}</span>
+                      {c.description && <span className="block truncate text-xs text-neutral-500">{c.description}</span>}
+                    </span>
+                    <button
+                      onClick={() => setCelebs((prev) => prev.filter((x) => x.name !== c.name))}
+                      aria-label={`Remove ${c.name}`}
+                      className="shrink-0 cursor-pointer text-lg leading-none text-neutral-400 hover:text-rose-500"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-2 flex flex-col gap-2">
+              <input
+                value={celebName}
+                onChange={(e) => setCelebName(e.target.value.slice(0, 40))}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCeleb()}
+                placeholder="Celebrity name (e.g. Taylor Swift)"
+                className="rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-[15px] outline-none focus:border-blue-500 dark:border-neutral-700"
+              />
+              <input
+                value={celebDescription}
+                onChange={(e) => setCelebDescription(e.target.value.slice(0, 120))}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCeleb()}
+                placeholder="Personality (optional) — e.g. funny, chaotic, loves cats"
+                className="rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-[15px] outline-none focus:border-blue-500 dark:border-neutral-700"
+              />
+              <button
+                onClick={handleAddCeleb}
+                disabled={!celebName.trim() || celebs.length >= MAX_CELEBS}
+                className="cursor-pointer self-start rounded-full border border-neutral-300 px-4 py-1.5 text-sm font-medium transition-opacity disabled:opacity-40 dark:border-neutral-700"
+              >
+                Add celeb
+              </button>
+            </div>
           </div>
 
           <button

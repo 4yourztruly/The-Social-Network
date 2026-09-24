@@ -1,9 +1,9 @@
-import type { CareerPack } from './types'
+import type { CareerPackDef } from './types'
 
 const WORLD = 'Halcyon Music'
 const RIVAL = 'Prism Sound'
 
-export const singerPack: CareerPack = {
+export const singerPack: CareerPackDef = {
   id: 'singer',
   label: 'Singer',
   emoji: '🎵',

@@ -9,9 +9,9 @@ import type { Persona } from '../../types'
 // a home run alike. Only the keyword rules that produce these tags, and the
 // line content that reacts to them, vary per career.
 export const ELIGIBLE_PERSONAS_BY_TAG: Partial<Record<string, Persona[]>> = {
-  big_moment: ['loyal_fan', 'teammate', 'meme_account', 'match_reporter'],
-  huge_moment: ['loyal_fan', 'teammate', 'meme_account', 'match_reporter', 'coach'],
-  win: ['loyal_fan', 'teammate', 'meme_account'],
+  big_moment: ['loyal_fan', 'teammate', 'meme_account', 'match_reporter', 'celebrity'],
+  huge_moment: ['loyal_fan', 'teammate', 'meme_account', 'match_reporter', 'coach', 'celebrity'],
+  win: ['loyal_fan', 'teammate', 'meme_account', 'celebrity'],
   loss: ['hater', 'loyal_fan', 'rival', 'meme_account'],
   rivalry: ['rival', 'loyal_fan', 'meme_account'],
   controversial: ['hater', 'tabloid', 'rival', 'loyal_fan', 'meme_account'],
@@ -20,12 +20,12 @@ export const ELIGIBLE_PERSONAS_BY_TAG: Partial<Record<string, Persona[]>> = {
   rumor: ['insider', 'loyal_fan', 'hater'],
   deal: ['insider', 'agent', 'loyal_fan'],
   criticism: ['hater', 'loyal_fan', 'meme_account'],
-  relationship: ['tabloid', 'loyal_fan', 'meme_account'],
+  relationship: ['tabloid', 'loyal_fan', 'meme_account', 'celebrity'],
   apology: ['loyal_fan', 'hater', 'meme_account'],
-  gratitude: ['loyal_fan', 'teammate'],
+  gratitude: ['loyal_fan', 'teammate', 'celebrity'],
 }
 
-export const DEFAULT_ELIGIBLE_PERSONAS: Persona[] = ['loyal_fan', 'meme_account']
+export const DEFAULT_ELIGIBLE_PERSONAS: Persona[] = ['loyal_fan', 'meme_account', 'celebrity']
 
 export function eligiblePersonasForTags(tags: readonly string[]): Persona[] {
   const set = new Set<Persona>()
