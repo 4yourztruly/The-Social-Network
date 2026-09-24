@@ -39,6 +39,7 @@ import { buildCelebSeeds } from '../ai/celebSeedService'
 import { buildFixedMediaSeeds } from '../content/universe'
 import { generateAiSeedPost } from '../ai/seedContentService'
 import { isNPC } from '../types'
+import { resolvePublicity } from '../engine/publicity'
 import type { WorldStory } from '../types'
 import { fetchWikipediaFacts } from '../engine/wikiFacts'
 import { registerMemorySource } from '../engine/npcMemory'
@@ -100,6 +101,9 @@ import { canSpend, recordSpend } from '../ai/budget'
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000
 
+// Where each open DM thread stood when the player opened it — see finishDmSession.
+const dmSessionStart = new Map<string, number>()
+
 export const SAVE_VERSION = 6
 
 export interface RelationshipChangeSummary {
@@ -113,7 +117,7 @@ export interface RelationshipChangeSummary {
 // action, since an activity/event's outcome can resolve asynchronously
 // (AI narration) well after the action call itself returns.
 export interface OutcomeReport {
-  kind: 'post' | 'activity' | 'event'
+  kind: 'post' | 'activity' | 'event' | 'comment' | 'story' | 'dm'
   xpGained: number
   statDeltas: Effect[]
   followerDelta: number
@@ -209,6 +213,9 @@ export interface GameState {
   // DMs
   sendPlayerMessage: (npcId: string, text: string) => void
   markThreadRead: (npcId: string) => void
+  // A DM "session" is one visit to a thread: the report card comes when you leave it.
+  beginDmSession: (npcId: string) => void
+  finishDmSession: (npcId: string, sinceIndex?: number) => void
 
   // activities
   createActivity: (input: CreateActivityInput) => string
@@ -527,6 +534,92 @@ export const useGameStore = create<GameState>((set, get) => {
     celebOutreach()
     runWorldGossip()
     if (hold.day) void finishAiDay(hold.day)
+  }
+
+  const NEGATIVE_TAGS = ['controversial', 'criticism', 'scandal_leak', 'setback']
+
+  // The smaller sibling of the post/activity/event report card, for
+  // everything else the player does — a reply, a comment, a story, a chat.
+  // Real (scaled-down) stat, follower and relationship effects, plus the same
+  // expandable explanation, so no action goes unanswered.
+  function lightActionReport(args: {
+    kind: 'comment' | 'story' | 'dm'
+    subject: 'reply' | 'story' | 'chat'
+    text: string
+    summary: string
+    caption: string
+    npcIds: string[]
+    npcDelta: number
+    scale: number
+    followerBonus?: boolean
+    buzz?: string
+  }) {
+    const state = get()
+    const pack = CAREER_PACKS[state.player.career]
+    const now = Date.now()
+    const tags = [...scanKeywordTags(args.text, pack.keywordRules), ...funMarkerTags(args.text)]
+    const rng = mulberry32(hashStringToSeed(`${args.kind}_${now}_${args.text}`))
+    const negative = tags.some((t) => NEGATIVE_TAGS.includes(t))
+
+    const statDeltas: Effect[] = statDeltasForTags(rng, tags)
+      // A private chat never moves your public following.
+      .filter((e) => args.kind !== 'dm' || e.type !== 'followers')
+      .map((e) => ({ ...e, delta: Math.round(e.delta * args.scale) }))
+      .filter((e) => e.delta !== 0)
+    const playerProfile = state.profiles[PLAYER_ID] as Profile
+    let followerDelta = statDeltas.filter((e) => e.type === 'followers').reduce((sum, e) => sum + e.delta, 0)
+    if (args.followerBonus && !negative) followerDelta += Math.max(1, Math.round(playerProfile.followers * 0.001 * (0.5 + rng())))
+
+    const statEffects = statDeltas.filter((e) => e.type === 'stat')
+    const swing = statEffects.reduce((sum, e) => sum + Math.abs(e.delta), 0)
+    const xp = 3 + swing * 2
+
+    const npcDelta = negative ? -Math.abs(args.npcDelta) : args.npcDelta
+    const profiles = { ...state.profiles }
+    const relationshipChanges: RelationshipChangeSummary[] = []
+    const relationships: OutcomeDetails['relationships'] = []
+    for (const npcId of args.npcIds) {
+      const npc = profiles[npcId]
+      if (!npc || !isNPC(npc) || npcDelta === 0) continue
+      const after = Math.max(-100, Math.min(100, npc.relationship + npcDelta))
+      if (after === npc.relationship) continue
+      profiles[npcId] = { ...npc, relationship: after, lastRelationshipChange: { delta: npcDelta, reason: args.caption, at: now } }
+      relationshipChanges.push({ npcId, delta: npcDelta })
+      relationships.push({
+        npcId,
+        delta: npcDelta,
+        before: npc.relationship,
+        after,
+        reason: negative ? 'It came across as confrontational, which cooled things.' : 'Making the effort to engage warmed things up.',
+      })
+    }
+    profiles[PLAYER_ID] = {
+      ...playerProfile,
+      followers: Math.max(0, playerProfile.followers + followerDelta),
+      lastFollowerChange: followerDelta !== 0 ? { delta: followerDelta, reason: args.caption, at: now } : playerProfile.lastFollowerChange,
+    }
+    const nextPlayer = { ...state.player, xp: state.player.xp + xp }
+    for (const e of statEffects) {
+      if (e.target === 'humor' || e.target === 'aura') nextPlayer[e.target] = Math.max(0, Math.min(100, nextPlayer[e.target] + e.delta))
+    }
+    Object.assign(nextPlayer, lastStatChangesFromEffects(statEffects, args.caption, now))
+
+    const report: OutcomeReport = {
+      kind: args.kind,
+      xpGained: xp,
+      statDeltas,
+      followerDelta,
+      relationshipChanges,
+      reason: args.caption,
+      details: {
+        summary: args.summary,
+        statReasons: explainStatDeltas(tags, statDeltas, args.subject, 'People noticed and a few followed.', followerDelta),
+        relationships,
+        signals: tags,
+        buzz: args.buzz,
+      },
+    }
+    set({ profiles, player: nextPlayer, lastOutcomeReport: report })
   }
 
   const WORLD_PAIR_SCENES = [
@@ -1162,7 +1255,13 @@ export const useGameStore = create<GameState>((set, get) => {
     const rng = mulberry32(hashStringToSeed(`${encounterId}_resolve_${choice.id}_${Date.now()}`))
     const tier = rollTier(rng, choice.risk)
     const playerProfile = state.profiles[PLAYER_ID] as Profile
-    const outcome = tierOutcome(tier, playerProfile.followers)
+    const rawOutcome = tierOutcome(tier, playerProfile.followers)
+    // A private moment doesn't change your following or make the news.
+    const eventPublicity = resolvePublicity(`${encounterText} ${choice.label}`, rawOutcome.tags, rng())
+    const eventIsPublic = eventPublicity.isPublic
+    const outcome = eventIsPublic
+      ? rawOutcome
+      : { ...rawOutcome, followerDelta: 0, statDeltas: rawOutcome.statDeltas.filter((e) => e.type !== 'followers') }
     const fallbackText = outcomeText(rng, tier)
 
     const nextPlayer = {
@@ -1225,13 +1324,16 @@ export const useGameStore = create<GameState>((set, get) => {
           ),
           relationships: [],
           signals: outcome.tags,
-          buzz: `${pickMediaOutlet(Object.values(get().profiles).filter(isNPC))?.displayName ?? 'The tabloids'} ran a story about this — look for it in the feed and in the comments around it.`,
+          buzz: eventIsPublic
+            ? `${eventPublicity.leaked ? 'Somehow the paparazzi found out. ' : ''}${pickMediaOutlet(Object.values(get().profiles).filter(isNPC))?.displayName ?? 'The tabloids'} ran a story about this — look for it in the feed and in the comments around it.`
+            : 'This stayed private — nobody outside knows, so no followers and no headlines.',
         },
       }
       set((s) => ({ activityLog: [...s.activityLog, logEntry], lastOutcomeReport: report }))
       advanceDay()
 
-      // The tabloids run this one, whatever the outcome.
+      // Only public moments make the news.
+      if (eventIsPublic)
       runGossip({
         kind: 'event',
         playerName: playerProfile.displayName,
@@ -1674,6 +1776,19 @@ export const useGameStore = create<GameState>((set, get) => {
         },
       ])
     }
+
+    const target = parent ? get().profiles[parent.authorId] : undefined
+    const targetName = target?.displayName ?? 'someone'
+    lightActionReport({
+      kind: 'comment',
+      subject: 'reply',
+      text: trimmed,
+      summary: `You ${parent?.kind === 'reply' ? 'replied to' : 'commented on'} ${targetName}: "${trimmed.length > 90 ? `${trimmed.slice(0, 90)}…` : trimmed}"${parentAuthor && isNPC(parentAuthor) ? ` ${targetName} and others in the thread may answer.` : ''}`,
+      caption: `From your ${parent?.kind === 'reply' ? 'reply' : 'comment'} to ${targetName}`,
+      npcIds: target && isNPC(target) ? [target.id] : [],
+      npcDelta: 1,
+      scale: 0.5,
+    })
   },
 
   submitPlayerStory: (caption) => {
@@ -1699,6 +1814,17 @@ export const useGameStore = create<GameState>((set, get) => {
         posts: { ...state.posts, [story.id]: story },
         postOrder: [story.id, ...state.postOrder],
       }
+    })
+    lightActionReport({
+      kind: 'story',
+      subject: 'story',
+      text: trimmed,
+      summary: `You shared a story: "${trimmed.length > 90 ? `${trimmed.slice(0, 90)}…` : trimmed}". It's up for the next 24 hours for your followers to see.`,
+      caption: 'From your story',
+      npcIds: [],
+      npcDelta: 0,
+      scale: 0.7,
+      followerBonus: true,
     })
   },
 
@@ -1901,6 +2027,34 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  beginDmSession: (npcId) => {
+    dmSessionStart.set(npcId, get().threads[npcId]?.messages.length ?? 0)
+  },
+
+  // Leaving a chat is what earns the report card — not each text sent. Covers
+  // only what you sent since you opened it (or since `sinceIndex`).
+  finishDmSession: (npcId, sinceIndex) => {
+    const thread = get().threads[npcId]
+    const from = sinceIndex ?? dmSessionStart.get(npcId) ?? thread?.messages.length ?? 0
+    dmSessionStart.delete(npcId)
+    if (!thread) return
+    const sent = thread.messages.slice(from).filter((m) => m.from === 'player')
+    if (sent.length === 0) return
+    const npc = get().profiles[npcId]
+    if (!npc || !isNPC(npc)) return
+    const all = sent.map((m) => m.text).join(' ')
+    lightActionReport({
+      kind: 'dm',
+      subject: 'chat',
+      text: all,
+      summary: `You chatted with ${npc.displayName} — ${sent.length} ${sent.length === 1 ? 'message' : 'messages'} from you. Time spent in someone's DMs builds the relationship.`,
+      caption: `From your chat with ${npc.displayName}`,
+      npcIds: [npcId],
+      npcDelta: sent.length >= 4 ? 2 : 1,
+      scale: 0.5,
+    })
+  },
+
   sendPlayerMessage: (npcId, text) => {
     const trimmed = text.trim()
     if (!trimmed) return
@@ -2095,7 +2249,10 @@ export const useGameStore = create<GameState>((set, get) => {
     }
 
     const rng = mulberry32(hashStringToSeed(`${activityId}_end`))
-    const statDeltas = statDeltasForTags(rng, activity.tags)
+    // Only a public scene (a night out, a premiere, ...) gets public reactions.
+    const activityPublicity = resolvePublicity(activity.description, activity.tags, rng())
+    const activityIsPublic = activityPublicity.isPublic
+    const statDeltas = statDeltasForTags(rng, activity.tags).filter((e) => activityIsPublic || e.type !== 'followers')
     const nextPlayer = {
       ...applyPlayerEffects(state.player, statDeltas),
       ...lastStatChangesFromEffects(statDeltas, activity.description, Date.now()),
@@ -2141,7 +2298,9 @@ export const useGameStore = create<GameState>((set, get) => {
         ),
         relationships: activityRelationships,
         signals: activity.tags,
-        buzz: `${pickMediaOutlet(Object.values(state.profiles).filter(isNPC))?.displayName ?? 'The tabloids'} ran a story about this — look for it in the feed and in the comments around it.`,
+        buzz: activityIsPublic
+          ? `${activityPublicity.leaked ? 'Somehow the paparazzi found out. ' : ''}${pickMediaOutlet(Object.values(state.profiles).filter(isNPC))?.displayName ?? 'The tabloids'} ran a story about this — look for it in the feed and in the comments around it.`
+          : 'This stayed between the people there — no followers gained and nothing in the news.',
       },
     }
 
@@ -2157,8 +2316,8 @@ export const useGameStore = create<GameState>((set, get) => {
     })
     advanceDay()
 
-    // The tabloids always run the story of what the player got up to, and
-    // people comment on it.
+    // Public scenes make the news and people comment on them; private ones don't.
+    if (activityIsPublic)
     runGossip({
       kind: 'activity',
       playerName: (state.profiles[PLAYER_ID] as Profile).displayName,

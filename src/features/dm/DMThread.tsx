@@ -21,9 +21,17 @@ export function DMThread({ npcId, onOpenProfile, onBack }: DMThreadProps) {
   const aiTyping = useGameStore((s) => s.aiTyping)
   const sendPlayerMessage = useGameStore((s) => s.sendPlayerMessage)
   const markThreadRead = useGameStore((s) => s.markThreadRead)
+  const beginDmSession = useGameStore((s) => s.beginDmSession)
+  const finishDmSession = useGameStore((s) => s.finishDmSession)
   const [text, setText] = useState('')
 
   const messages = thread?.messages ?? []
+
+  // The report card for a chat comes when you leave it, not per message.
+  useEffect(() => {
+    beginDmSession(npcId)
+    return () => finishDmSession(npcId)
+  }, [npcId, beginDmSession, finishDmSession])
 
   useEffect(() => {
     markThreadRead(npcId)

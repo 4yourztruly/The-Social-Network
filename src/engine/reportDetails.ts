@@ -82,7 +82,7 @@ function listPhrases(tags: readonly string[]): string {
 
 const STAT_LABEL = { humor: 'Humor', aura: 'Aura', followers: 'Followers' } as const
 
-export type ReportSubject = 'post' | 'activity' | 'event'
+export type ReportSubject = 'post' | 'activity' | 'event' | 'reply' | 'story' | 'chat'
 
 // Why humor/aura moved: the detected signals that push that stat, or the
 // small baseline when nothing stood out. Followers get their own reason

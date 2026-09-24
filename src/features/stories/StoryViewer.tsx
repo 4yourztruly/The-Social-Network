@@ -28,6 +28,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
   const postOrder = useGameStore((s) => s.postOrder)
   const profiles = useGameStore((s) => s.profiles)
   const sendPlayerMessage = useGameStore((s) => s.sendPlayerMessage)
+  const finishDmSession = useGameStore((s) => s.finishDmSession)
   const addPlayerReply = useGameStore((s) => s.addPlayerReply)
   const player = useGameStore((s) => s.profiles[PLAYER_ID])
   const authorIds = useActiveStoryAuthors(viewedAuthorIds)
@@ -142,7 +143,10 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
 
   const handleReply = () => {
     if (!replyText.trim() || authorId === PLAYER_ID) return
+    const before = useGameStore.getState().threads[authorId]?.messages.length ?? 0
     sendPlayerMessage(authorId, replyText)
+    // A reply to a story is its own one-off chat — report card right away.
+    finishDmSession(authorId, before)
     setReplyText('')
   }
 

@@ -97,3 +97,38 @@ describe('reply chains', () => {
     expect(all.filter((p) => p.kind === 'reply').length).toBeGreaterThan(before)
   })
 })
+
+describe('every action gets a report card', () => {
+  it('replies, stories and chats each report — chats only when you leave', async () => {
+    await newWorld()
+    const st = () => useGameStore.getState()
+    const post = Object.values(st().posts).find((p) => p.kind === 'post' && p.authorId !== PLAYER_ID)!
+
+    st().dismissOutcomeReport()
+    st().addPlayerReply(post.id, 'this is hilarious lol')
+    expect(st().lastOutcomeReport?.kind).toBe('comment')
+    expect(st().lastOutcomeReport?.details?.summary).toContain('this is hilarious')
+
+    st().dismissOutcomeReport()
+    st().submitPlayerStory('training day')
+    expect(st().lastOutcomeReport?.kind).toBe('story')
+    expect(st().lastOutcomeReport?.followerDelta).toBeGreaterThan(0)
+
+    const celeb = Object.values(st().profiles).filter(isNPC).find((n) => n.persona === 'celebrity')!
+    st().dismissOutcomeReport()
+    st().beginDmSession(celeb.id)
+    st().sendPlayerMessage(celeb.id, 'hey, how are you?')
+    st().sendPlayerMessage(celeb.id, 'want to hang out?')
+    expect(st().lastOutcomeReport).toBeNull()
+    const before = st().profiles[celeb.id] as ReturnType<typeof Object.values>[number] as { relationship: number }
+    st().finishDmSession(celeb.id)
+    expect(st().lastOutcomeReport?.kind).toBe('dm')
+    expect((st().profiles[celeb.id] as { relationship: number }).relationship).toBeGreaterThanOrEqual(before.relationship)
+
+    // leaving again with nothing new says nothing
+    st().dismissOutcomeReport()
+    st().beginDmSession(celeb.id)
+    st().finishDmSession(celeb.id)
+    expect(st().lastOutcomeReport).toBeNull()
+  })
+})
