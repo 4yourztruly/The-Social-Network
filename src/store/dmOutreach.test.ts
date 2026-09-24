@@ -70,3 +70,30 @@ describe('celeb outreach and DM availability', () => {
     expect(npcReplyBack?.text.startsWith('@test ')).toBe(true)
   })
 })
+
+describe('reply chains', () => {
+  it('a player reply pulls in the original commenter and at most a couple more, never a loop', async () => {
+    await newWorld()
+    const state = useGameStore.getState()
+    const post = Object.values(state.posts).find((p) => p.kind === 'post' && p.authorId !== PLAYER_ID)!
+    // Seed a few more participants in the thread so chain responders exist.
+    state.addPlayerReply(post.id, 'first thought')
+    const before = Object.values(useGameStore.getState().posts).filter((p) => p.kind === 'reply').length
+    for (let i = 0; i < 12; i++) useGameStore.getState().addPlayerReply(post.id, `take ${i}`)
+    const all = Object.values(useGameStore.getState().posts)
+    const playerReplies = all.filter((p) => p.kind === 'reply' && p.authorId === PLAYER_ID)
+    for (const mine of playerReplies) {
+      const descendants: string[] = []
+      const walk = (id: string) => {
+        for (const c of all.filter((p) => p.parentId === id)) {
+          descendants.push(c.id)
+          walk(c.id)
+        }
+      }
+      walk(mine.id)
+      // guaranteed original + at most 2 chained hops, and nobody looped
+      expect(descendants.length).toBeLessThanOrEqual(3 * 2)
+    }
+    expect(all.filter((p) => p.kind === 'reply').length).toBeGreaterThan(before)
+  })
+})

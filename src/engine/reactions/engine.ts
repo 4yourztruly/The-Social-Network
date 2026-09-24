@@ -44,6 +44,10 @@ export interface CommentPayload {
   // reply to it from this other social-circle NPC — one level deep only,
   // never chained further. See runSocialCircleEngine.
   replyFromNpcId?: string
+  // Set on comments in a thread the player replied into: how many NPC hops
+  // deep this one is. Each one may pull in one more participant, but the
+  // chain is capped (see MAX_CHAIN_DEPTH in the store) so it can't loop.
+  chainDepth?: number
 }
 
 export interface ScheduledCommentItem {

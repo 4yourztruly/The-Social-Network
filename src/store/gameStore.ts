@@ -25,6 +25,7 @@ import {
   initialsFor,
   PLAYER_ID,
   seedDailyPosts,
+  NPC_SOCIAL_SCORE,
   seedReplies,
   type OnboardingInput,
 } from '../content/seed'
@@ -87,7 +88,7 @@ import {
 } from '../engine/randomEncounter'
 import { msUntilNextEvent, recordEventTriggered } from '../engine/eventCooldown'
 import { generateAiDmReply } from '../ai/dmService'
-import { generateAiComment } from '../ai/commentService'
+import { generateAiCommentBatch, generateAiDailyPosts, MAX_BATCH_ITEMS, type BatchCommentItem } from '../ai/batchService'
 import { generateActivityTurn, generateMediaCoverage } from '../ai/activityService'
 import { generateAiEncounter, generateAiEncounterOutcome } from '../ai/eventService'
 import { getProviderConfig, loadProviderConfigs } from '../ai/keyStorage'
@@ -287,7 +288,150 @@ export const useGameStore = create<GameState>((set, get) => {
     return new Set(Object.values(posts).filter((p) => p.parentId && storyIds.has(p.parentId)).map((p) => p.text))
   }
 
+  function aiConfigNow(): NonNullable<ReturnType<typeof getProviderConfig>> | undefined {
+    const st = get()
+    if (!st.settings.aiEnabled) return undefined
+    const config = getProviderConfig(st.settings.activeProviderId)
+    return config && canSpend(config.id, config.rpdBudget) ? config : undefined
+  }
+
+  const AI_COMMENTS_PER_PARENT = 3
+
+  // Fills posts/stories with AI-written comments in as few requests as
+  // possible (one per ~24 comments). Returns false when AI wasn't available
+  // or the call failed outright, so the caller can fall back to templates.
+  async function aiPopulateComments(parents: Post[], countFor: (p: Post) => number): Promise<boolean> {
+    const config = aiConfigNow()
+    if (!config || parents.length === 0) return false
+    const state = get()
+    const pool = Object.values(state.profiles)
+      .filter(isNPC)
+      .filter((n) => tierForPersona(n.persona) !== 'media')
+    if (pool.length === 0) return false
+    const rng = mulberry32(hashStringToSeed(`aicomments_${state.clock}_${parents.length}_${Date.now()}`))
+    const plan: { parent: Post; npc: NPC }[] = []
+    for (const parent of parents) {
+      const n = Math.min(countFor(parent), AI_COMMENTS_PER_PARENT)
+      const chosen = pool
+        .filter((c) => c.id !== parent.authorId)
+        .sort(() => rng() - 0.5)
+        .slice(0, n)
+      for (const npc of chosen) plan.push({ parent, npc })
+    }
+    if (plan.length === 0) return false
+
+    const playerProfile = state.profiles[PLAYER_ID] as Profile
+    const pack = CAREER_PACKS[state.player.career]
+    let anySucceeded = false
+    for (let start = 0; start < plan.length; start += MAX_BATCH_ITEMS) {
+      const chunk = plan.slice(start, start + MAX_BATCH_ITEMS)
+      const texts = await generateAiCommentBatch({
+        items: chunk.map(({ parent, npc }) => ({
+          npc,
+          targetText: parent.text,
+          targetAuthorName: get().profiles[parent.authorId]?.displayName ?? 'someone',
+          targetIsPlayer: parent.authorId === PLAYER_ID,
+          targetIsReply: false,
+        })),
+        playerDisplayName: playerProfile.displayName,
+        orgName: state.player.club || pack.worldName,
+        recentActivity: state.activityLog,
+        config,
+      })
+      if (!texts) continue
+      anySucceeded = true
+      recordSpend(config.id)
+      const replies: Post[] = []
+      texts.forEach((text, i) => {
+        const { parent, npc } = chunk[i]
+        const id = makeId('post')
+        const engagement = estimateReplyEngagement(mulberry32(hashStringToSeed(`${id}_engagement`)), npc.followers, NPC_SOCIAL_SCORE)
+        replies.push({
+          id,
+          authorId: npc.id,
+          kind: 'reply',
+          parentId: parent.id,
+          text,
+          tags: [],
+          createdAt: Math.min(Date.now(), parent.createdAt + randomInt(rng, 1, 120) * 60 * 1000),
+          likes: engagement.likes,
+          reposts: engagement.reposts,
+          replies: 0,
+          origin: 'ai',
+        })
+      })
+      set((st) => {
+        const posts = { ...st.posts }
+        for (const r of replies) {
+          posts[r.id] = r
+          const p = posts[r.parentId as string]
+          if (p) posts[p.id] = { ...p, replies: p.replies + 1 }
+        }
+        return { posts, postOrder: [...replies.map((r) => r.id), ...st.postOrder] }
+      })
+    }
+    return anySucceeded
+  }
+
+  // The deterministic fallback for the above: canned reactions, sized by
+  // each parent's original reply count.
+  function addTemplateReplies(parents: Post[], counts: Record<string, number>) {
+    const state = get()
+    const pack = CAREER_PACKS[state.player.career]
+    const npcRecord: Record<string, NPC> = {}
+    for (const p of Object.values(state.profiles)) if (isNPC(p)) npcRecord[p.id] = p
+    const withCounts = parents.map((p) => ({ ...p, replies: counts[p.id] ?? 0 }))
+    const rng = mulberry32(hashStringToSeed(`tplreplies_${state.clock}_${parents.length}`))
+    const replies = seedReplies(pack, rng, npcRecord, withCounts, state.player.club || pack.worldName)
+    set((st) => {
+      const posts = { ...st.posts }
+      for (const r of replies) posts[r.id] = r
+      for (const wc of withCounts) if (posts[wc.id]) posts[wc.id] = { ...posts[wc.id], replies: wc.replies }
+      return { posts, postOrder: [...replies.map((r) => r.id), ...st.postOrder] }
+    })
+  }
+
+  interface DayHold {
+    posts: Post[]
+    replyCounts: Record<string, number>
+    day: number
+  }
+
+  // AI mode's version of a new day: the day's posts are written by the AI
+  // (one request) and their comments too (one more), instead of canned lines.
+  // Any failure falls back to the templates for just that part.
+  async function finishAiDay(hold: DayHold) {
+    const config = aiConfigNow()
+    const state = get()
+    const pack = CAREER_PACKS[state.player.career]
+    const playerUsername = state.profiles[PLAYER_ID]?.username
+    let texts: Map<number, string> | null = null
+    if (config) {
+      texts = await generateAiDailyPosts({
+        authors: hold.posts.map((p) => get().profiles[p.authorId] as NPC),
+        worldName: pack.worldName,
+        config,
+      })
+      if (texts) recordSpend(config.id)
+    }
+    const finalPosts = hold.posts.map((p, i) => {
+      // The "public @-ing the player" post keeps its own text.
+      const keep = !!playerUsername && p.text.includes(`@${playerUsername}`)
+      const aiText = keep ? undefined : texts?.get(i)
+      return { ...p, gameDay: hold.day, replies: 0, ...(aiText ? { text: aiText, origin: 'ai' as const } : {}) }
+    })
+    set((st) => {
+      const posts = { ...st.posts }
+      for (const p of finalPosts) posts[p.id] = p
+      return { posts, postOrder: [...finalPosts.map((p) => p.id), ...st.postOrder] }
+    })
+    const ok = await aiPopulateComments(finalPosts, (p) => Math.ceil((hold.replyCounts[p.id] ?? 0) / 4))
+    if (!ok) addTemplateReplies(finalPosts, hold.replyCounts)
+  }
+
   function advanceDay() {
+    const hold: { day?: DayHold } = {}
+    const aiOn = !!aiConfigNow()
     set((state) => {
       const pack = CAREER_PACKS[state.player.career]
       const npcs: Record<string, NPC> = {}
@@ -297,9 +441,18 @@ export const useGameStore = create<GameState>((set, get) => {
       const rng = mulberry32(hashStringToSeed(`day_${state.gameDay}_${state.clock}_${Object.keys(state.posts).length}`))
       const orgForFlavor = state.player.club || pack.worldName
       const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor, state.profiles[PLAYER_ID]?.username)
+      const nextGameDay = state.gameDay + 1
+      if (aiOn) {
+        // No canned posts/comments in AI mode — finishAiDay adds the AI's.
+        hold.day = {
+          posts: dailyPosts,
+          replyCounts: Object.fromEntries(dailyPosts.map((p) => [p.id, p.replies])),
+          day: nextGameDay,
+        }
+        return { gameDay: nextGameDay }
+      }
       const dailyReplies = seedReplies(pack, rng, npcs, dailyPosts, orgForFlavor)
       const newItems = [...dailyPosts, ...dailyReplies].sort((a, b) => b.createdAt - a.createdAt)
-      const nextGameDay = state.gameDay + 1
 
       const posts = { ...state.posts }
       for (const post of newItems) {
@@ -314,6 +467,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     })
     celebOutreach()
+    if (hold.day) void finishAiDay(hold.day)
   }
 
   // Celebs the player is getting along with (relationship in the green, 25%+)
@@ -446,6 +600,91 @@ export const useGameStore = create<GameState>((set, get) => {
     // Fired after the set() above completes — never nest a set() call
     // inside another set()'s updater.
     if (replyItem) processComments([replyItem])
+    else {
+      const chainItem = nextChainItem(payload, commentPostId)
+      if (chainItem) processComments([chainItem])
+    }
+  }
+
+  // In a thread the player replied into, an NPC's reply can pull one more
+  // participant in — someone else in the thread answering the new comment,
+  // or answering the player directly. Each hop is less likely than the last
+  // and the chain stops at MAX_CHAIN_DEPTH, so it can never loop.
+  const MAX_CHAIN_DEPTH = 2
+  const MAX_THREAD_SIZE = 14
+  function nextChainItem(payload: CommentPayload, commentPostId: string): ScheduledCommentItem | null {
+    const depth = payload.chainDepth
+    if (depth === undefined || depth >= MAX_CHAIN_DEPTH) return null
+    const rng = mulberry32(hashStringToSeed(`${commentPostId}_chain`))
+    if (rng() > (depth === 0 ? 0.55 : 0.25)) return null
+
+    const st = get()
+    const latest = st.posts[commentPostId]
+    if (!latest) return null
+    let root = latest
+    while (root.parentId && st.posts[root.parentId]) root = st.posts[root.parentId]
+    const childrenOf = new Map<string, string[]>()
+    for (const p of Object.values(st.posts)) {
+      if (!p.parentId) continue
+      const list = childrenOf.get(p.parentId)
+      if (list) list.push(p.id)
+      else childrenOf.set(p.parentId, [p.id])
+    }
+    const authorIds = new Set<string>()
+    const stack = [root.id]
+    let size = 0
+    while (stack.length > 0) {
+      const id = stack.pop() as string
+      const p = st.posts[id]
+      if (!p) continue
+      size++
+      authorIds.add(p.authorId)
+      stack.push(...(childrenOf.get(id) ?? []))
+    }
+    if (size > MAX_THREAD_SIZE) return null
+
+    const candidates = [...authorIds]
+      .filter((id) => id !== payload.npcId && id !== PLAYER_ID)
+      .map((id) => st.profiles[id])
+      .filter((n): n is NPC => !!n && isNPC(n))
+    if (candidates.length === 0) return null
+    const responder = pick(rng, candidates)
+
+    // Answer the comment that just landed, or go straight at the player's own reply.
+    let target = latest
+    if (rng() < 0.5) {
+      let cur = latest
+      while (cur.parentId && st.posts[cur.parentId]) {
+        cur = st.posts[cur.parentId]
+        if (cur.authorId === PLAYER_ID) {
+          target = cur
+          break
+        }
+      }
+    }
+    if (target.authorId === responder.id) target = latest
+
+    const pack = CAREER_PACKS[st.player.career]
+    const playerProfile = st.profiles[PLAYER_ID] as Profile
+    const linePool = responder.offTopic ? GENERIC_OFFTOPIC_REACTION_POOL : pack.reactionPool[responder.persona]
+    const selection = selectLine(rng, linePool, [], responder.recentLineIds)
+    const fallbackText = applyPersonalityVoice(
+      fillTemplate(selection.line, { player: playerProfile.displayName, org: st.player.club || pack.worldName }),
+      responder,
+      rng,
+    )
+    set((s2) => ({
+      profiles: {
+        ...s2.profiles,
+        [responder.id]: { ...responder, recentLineIds: pushRecentLine(responder.recentLineIds, selection.lineId) },
+      },
+    }))
+    return {
+      id: makeId('sched'),
+      dueAt: Date.now(),
+      kind: 'comment',
+      payload: { parentPostId: target.id, npcId: responder.id, text: fallbackText, tags: [], aiEligible: true, chainDepth: depth + 1 },
+    }
   }
 
   // Materializes every comment in the batch as fast as possible: instantly
@@ -454,39 +693,47 @@ export const useGameStore = create<GameState>((set, get) => {
   // any failure falls straight back to the already-computed template text).
   function processComments(items: readonly ScheduledCommentItem[]) {
     if (items.length === 0) return
-    const state = get()
-    const aiConfig = state.settings.aiEnabled ? getProviderConfig(state.settings.activeProviderId) : undefined
-    const aiBudgetOk = !!aiConfig && canSpend(aiConfig.id, aiConfig.rpdBudget)
+    const config = aiConfigNow()
+    const aiItems: ScheduledCommentItem[] = []
 
     for (const item of items) {
-      const payload = item.payload
-      const npc = aiConfig && aiBudgetOk ? get().profiles[payload.npcId] : undefined
-      if (!payload.aiEligible || !aiConfig || !aiBudgetOk || !npc || !isNPC(npc)) {
-        materializeComment(payload, payload.text, item.dueAt, 'template')
-        continue
-      }
-
-      const snapshot = get()
-      const playerProfile = snapshot.profiles[PLAYER_ID] as Profile
-      const pack = CAREER_PACKS[snapshot.player.career]
-
-      void generateAiComment({
-        npc,
-        playerDisplayName: playerProfile.displayName,
-        orgName: snapshot.player.club || pack.worldName,
-        postText: snapshot.posts[payload.parentPostId]?.text ?? '',
-        recentActivity: snapshot.activityLog,
-        config: aiConfig,
-        newsFacts: payload.gossip,
-      }).then((aiText) => {
-        if (aiText) {
-          recordSpend(aiConfig.id)
-          materializeComment(payload, aiText, item.dueAt, 'ai')
-        } else {
-          materializeComment(payload, payload.text, item.dueAt, 'template')
-        }
-      })
+      const npc = get().profiles[item.payload.npcId]
+      if (item.payload.aiEligible && config && npc && isNPC(npc)) aiItems.push(item)
+      else materializeComment(item.payload, item.payload.text, item.dueAt, 'template')
     }
+    if (aiItems.length === 0 || !config) return
+
+    // One request for the whole batch — a post's entire comment section is a
+    // single call, not one per commenter, so a key isn't drained.
+    const snapshot = get()
+    const playerProfile = snapshot.profiles[PLAYER_ID] as Profile
+    const pack = CAREER_PACKS[snapshot.player.career]
+    const batch: BatchCommentItem[] = aiItems.map((item) => {
+      const target = snapshot.posts[item.payload.parentPostId]
+      const targetAuthor = target ? snapshot.profiles[target.authorId] : undefined
+      return {
+        npc: snapshot.profiles[item.payload.npcId] as NPC,
+        targetText: target?.text ?? '',
+        targetAuthorName: targetAuthor?.displayName ?? 'someone',
+        targetIsPlayer: target?.authorId === PLAYER_ID,
+        targetIsReply: target?.kind === 'reply',
+        newsFacts: item.payload.gossip,
+      }
+    })
+    void generateAiCommentBatch({
+      items: batch,
+      playerDisplayName: playerProfile.displayName,
+      orgName: snapshot.player.club || pack.worldName,
+      recentActivity: snapshot.activityLog,
+      config,
+    }).then((texts) => {
+      if (texts) recordSpend(config.id)
+      aiItems.forEach((item, i) => {
+        const aiText = texts?.get(i)
+        if (aiText) materializeComment(item.payload, aiText, item.dueAt, 'ai')
+        else materializeComment(item.payload, item.payload.text, item.dueAt, 'template')
+      })
+    })
   }
 
   // The existing fully-deterministic path: pick a line now, schedule it to
@@ -954,6 +1201,21 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     }
 
+    // AI mode: no canned comments in the opening feed either — strip them and
+    // let the AI write the visible ones (falls back to the canned ones on failure).
+    const strippedCounts: Record<string, number> = {}
+    if (aiEligible && config) {
+      for (const [id, p] of Object.entries(world.posts)) {
+        if (p.kind === 'reply') {
+          delete world.posts[id]
+        } else if (p.replies > 0) {
+          strippedCounts[id] = p.replies
+          world.posts[id] = { ...p, replies: 0 }
+        }
+      }
+      world.postOrder = world.postOrder.filter((id) => world.posts[id])
+    }
+
     set({
       ...world,
       clock: Date.now(),
@@ -975,6 +1237,15 @@ export const useGameStore = create<GameState>((set, get) => {
       onboarded: true,
       lastOutcomeReport: null,
     })
+
+    if (aiEligible && config) {
+      const all = Object.values(get().posts)
+      const feed = get().postOrder.map((id) => get().posts[id]).filter((p) => p?.kind === 'post').slice(0, 8)
+      const stories = all.filter((p) => p.kind === 'story' && p.authorId !== PLAYER_ID)
+      void aiPopulateComments([...feed, ...stories], () => AI_COMMENTS_PER_PARENT).then((ok) => {
+        if (!ok) addTemplateReplies(all.filter((p) => p.kind !== 'reply'), strippedCounts)
+      })
+    }
   },
 
   followNpc: (npcId) => {
@@ -1101,7 +1372,9 @@ export const useGameStore = create<GameState>((set, get) => {
         }
         const npcRecord: Record<string, NPC> = {}
         for (const p of Object.values(profiles)) if (isNPC(p)) npcRecord[p.id] = p
-        const storyComments = seedReplies(pack, rng, npcRecord, [story], state.player.club || pack.worldName, existingStoryCommentTexts(state.posts))
+        const storyComments = aiConfigNow()
+          ? []
+          : seedReplies(pack, rng, npcRecord, [story], state.player.club || pack.worldName, existingStoryCommentTexts(state.posts))
         posts = { ...posts, [story.id]: story }
         for (const c of storyComments) posts[c.id] = c
         postOrder = [...storyComments.map((c) => c.id), story.id, ...postOrder]
@@ -1113,6 +1386,15 @@ export const useGameStore = create<GameState>((set, get) => {
         postOrder,
       }
     })
+
+    // AI mode: the new person's story gets AI comments instead of canned ones.
+    const newStory = Object.values(get().posts).find((p) => p.kind === 'story' && p.authorId === id)
+    if (newStory && newStory.replies > 0 && !Object.values(get().posts).some((p) => p.parentId === newStory.id)) {
+      const counts = { [newStory.id]: newStory.replies }
+      void aiPopulateComments([newStory], () => AI_COMMENTS_PER_PARENT).then((ok) => {
+        if (!ok) addTemplateReplies([newStory], counts)
+      })
+    }
 
     return id
   },
@@ -1236,7 +1518,7 @@ export const useGameStore = create<GameState>((set, get) => {
           // grounding, which reads this same field's post text) means the
           // AI reacts to the player's actual words instead of the original
           // post/comment.
-          payload: { parentPostId: replyId, npcId: parentAuthor.id, text: fallbackText, tags: [], aiEligible: true },
+          payload: { parentPostId: replyId, npcId: parentAuthor.id, text: fallbackText, tags: [], aiEligible: true, chainDepth: 0 },
         },
       ])
     }

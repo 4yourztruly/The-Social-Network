@@ -13,7 +13,7 @@ import { estimateEngagement, estimateReplyEngagement, storyCommentCount } from '
 // Stand-in "social score" (see engine/formulas.estimateEngagement — normally
 // the player's humor+aura) used to size NPC-authored engagement numbers.
 // Middle-of-the-road on purpose: NPCs aren't playing the stat game.
-const NPC_SOCIAL_SCORE = 45
+export const NPC_SOCIAL_SCORE = 45
 
 // An offTopic NPC (a real celeb the AI picked for variety, unrelated to
 // this career's world) never draws from this pack's sport/industry-flavored
