@@ -3,7 +3,7 @@ import type { CareerPack, NPCSeed } from './careers/types'
 import { fillTemplate } from '../engine/templates/filler'
 import { mulberry32, pick, randomInt, type RNG } from '../engine/rng'
 import { makeId } from '../engine/id'
-import { isViewableProfile } from '../engine/npcTier'
+import { isViewableProfile, tierForPersona } from '../engine/npcTier'
 import { pushRecentLine, selectLine, selectPlainLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
 import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
@@ -31,6 +31,44 @@ function reactionPoolFor(pack: CareerPack, npc: NPC) {
 // random seeded posts, stories and replies.
 export function isGenericPoster(npc: NPC): boolean {
   return npc.persona !== 'tabloid' && npc.persona !== 'insider'
+}
+
+// Who gets to start a post on the main feed: celebs and the news outlet.
+// The general public (fans/haters/meme accounts) only comment and reply —
+// unless they're @-ing the player, see dailyMentionPost.
+function isFeedPoster(npc: NPC): boolean {
+  return isGenericPoster(npc) && tierForPersona(npc.persona) !== 'commenter'
+}
+
+const MENTION_POST_LINES = [
+  '@{player} you around? big fan honestly',
+  '@{player} whatever you post next I am here for it',
+  '@{player} need a reply from you today 🙏',
+  'okay @{player} we need to talk about your last post 😂',
+  '@{player} that last one was something else, respect',
+  '@{player} still not over what you said earlier lol',
+]
+
+// Occasionally a member of the public posts something aimed at the player.
+function dailyMentionPost(rng: RNG, npcs: Record<string, NPC>, playerUsername: string | undefined): Post | null {
+  if (!playerUsername || rng() > 0.3) return null
+  const pool = Object.values(npcs).filter((n) => tierForPersona(n.persona) === 'commenter')
+  if (pool.length === 0) return null
+  const author = pick(rng, pool)
+  const line = pick(rng, MENTION_POST_LINES).replace('{player}', playerUsername)
+  const engagement = estimateEngagement(rng, author.followers, NPC_SOCIAL_SCORE, [])
+  return {
+    id: makeId('post'),
+    authorId: author.id,
+    kind: 'post',
+    text: applyPersonalityVoice(line, author, rng),
+    tags: [],
+    createdAt: Date.now() - randomInt(rng, 1, 180) * 60 * 1000,
+    likes: engagement.likes,
+    reposts: engagement.reposts,
+    replies: randomInt(rng, 0, 4),
+    origin: 'template',
+  }
 }
 
 const PLAYER_ID = 'player'
@@ -158,7 +196,7 @@ function seedPosts(
   // general public) still can't be followed/DMed or have a viewable
   // profile (see engine/npcTier.ts), but they post/comment/reply just
   // like everyone else.
-  const npcList = Object.values(npcs).filter(isGenericPoster)
+  const npcList = Object.values(npcs).filter(isFeedPoster)
   const posts: Post[] = []
   for (let i = 0; i < count && npcList.length > 0; i++) {
     const author = pick(rng, npcList)
@@ -197,9 +235,10 @@ export function seedDailyPosts(
   npcs: Record<string, NPC>,
   count: number,
   orgForFlavor: string,
+  playerUsername?: string,
 ): Post[] {
   const now = Date.now()
-  const npcList = Object.values(npcs).filter(isGenericPoster)
+  const npcList = Object.values(npcs).filter(isFeedPoster)
   const posts: Post[] = []
   for (let i = 0; i < count && npcList.length > 0; i++) {
     const author = pick(rng, npcList)
@@ -208,7 +247,10 @@ export function seedDailyPosts(
     const selection = selectPlainLine(rng, lines, author.recentLineIds)
     author.recentLineIds = pushRecentLine(author.recentLineIds, selection.lineId)
     const text = fillTemplate(selection.line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
-    const ageMs = randomInt(rng, 1, 180) * 60 * 1000 // 1 min to 3h ago
+    // News outlets usually break the day's stories first, so they land at
+    // the bottom of the day's batch and everyone else can react above them.
+    const newsFirst = tierForPersona(author.persona) === 'media' && rng() < 0.85
+    const ageMs = newsFirst ? randomInt(rng, 181, 300) * 60 * 1000 : randomInt(rng, 1, 180) * 60 * 1000 // 1 min to 3h ago
     const engagement = estimateEngagement(rng, author.followers, NPC_SOCIAL_SCORE, [])
     posts.push({
       id: makeId('post'),
@@ -223,6 +265,8 @@ export function seedDailyPosts(
       origin: 'template',
     })
   }
+  const mention = dailyMentionPost(rng, npcs, playerUsername)
+  if (mention) posts.push(mention)
   return posts.sort((a, b) => b.createdAt - a.createdAt)
 }
 

@@ -289,7 +289,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       const rng = mulberry32(hashStringToSeed(`day_${state.gameDay}_${state.clock}_${Object.keys(state.posts).length}`))
       const orgForFlavor = state.player.club || pack.worldName
-      const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor)
+      const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor, state.profiles[PLAYER_ID]?.username)
       const dailyReplies = seedReplies(pack, rng, npcs, dailyPosts, orgForFlavor)
       const newItems = [...dailyPosts, ...dailyReplies].sort((a, b) => b.createdAt - a.createdAt)
       const nextGameDay = state.gameDay + 1
