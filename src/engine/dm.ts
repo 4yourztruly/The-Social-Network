@@ -45,3 +45,19 @@ export function generateDmReply(args: {
     recentLineIds: pushRecentLine(npc.recentLineIds, selection.lineId),
   }
 }
+
+// A celeb reaching out first, unprompted — friendly openers that don't
+// assume anything about the player's career, so they fit any celebrity.
+const OUTREACH_LINES = [
+  'Hey {player}! Been thinking about you — how are you doing?',
+  'Saw your latest post and had to reach out 😊 what are you up to?',
+  'Random one, but I really enjoy talking to you. Free to catch up soon?',
+  'Hey you. Just checking in — how has your week been?',
+  '{player}!! I was literally about to message you. What are you up to today?',
+  'Hope your week is going well {player}. Wanted to say hi!',
+]
+
+export function openingDmText(rng: RNG, npc: NPC, playerDisplayName: string): string {
+  const line = OUTREACH_LINES[Math.floor(rng() * OUTREACH_LINES.length)]
+  return applyPersonalityVoice(fillTemplate(line, { player: playerDisplayName, org: '' }), npc, rng)
+}

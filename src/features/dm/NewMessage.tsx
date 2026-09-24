@@ -4,6 +4,7 @@ import { isNPC } from '../../types'
 import { Avatar } from '../../components/Avatar'
 import { VerifiedBadge } from '../../components/VerifiedBadge'
 import { ArrowLeftIcon } from '../../components/icons'
+import { isDmAvailable } from '../../engine/npcTier'
 
 interface NewMessageProps {
   onSelect: (npcId: string) => void
@@ -13,7 +14,8 @@ interface NewMessageProps {
 export function NewMessage({ onSelect, onBack }: NewMessageProps) {
   const profiles = useGameStore((s) => s.profiles)
 
-  const npcs = useMemo(() => Object.values(profiles).filter(isNPC), [profiles])
+  // Only celebs and the news/tabloid outlets can be messaged.
+  const npcs = useMemo(() => Object.values(profiles).filter(isNPC).filter(isDmAvailable), [profiles])
   const following = useMemo(
     () => npcs.filter((n) => n.followedByPlayer).sort((a, b) => b.followers - a.followers),
     [npcs],

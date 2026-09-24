@@ -40,17 +40,16 @@ export function isFollowable(npc: NPC): boolean {
   return tierForPersona(npc.persona) === 'celeb'
 }
 
-// A celeb "follows back" once the relationship is decent enough — this
-// isn't gated on the player having followed first (a celeb can already be
-// following the player from the start, if their seeded relationship is
-// already above the bar). Only celebs are ever DMable; media/commenters
-// never are, regardless of relationship.
-const FOLLOW_BACK_RELATIONSHIP_THRESHOLD = 20
-
-export function npcFollowsPlayer(npc: NPC): boolean {
-  return tierForPersona(npc.persona) === 'celeb' && npc.relationship >= FOLLOW_BACK_RELATIONSHIP_THRESHOLD
+// Celebs and the news/tabloid outlets can be messaged directly — there's
+// no follow-back requirement. Commenters (the general public) never can.
+export function isDmAvailable(npc: NPC): boolean {
+  return tierForPersona(npc.persona) !== 'commenter'
 }
 
-export function isDmAvailable(npc: NPC): boolean {
-  return npcFollowsPlayer(npc)
+// A celeb at or above this relationship (the green part of the bar) may
+// message the player first, unprompted. See store's celeb outreach.
+export const OUTREACH_MIN_RELATIONSHIP = 25
+
+export function canMessageFirst(npc: NPC): boolean {
+  return tierForPersona(npc.persona) === 'celeb' && npc.relationship >= OUTREACH_MIN_RELATIONSHIP
 }

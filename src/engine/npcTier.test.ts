@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDmAvailable, isFollowable, isViewableProfile, npcFollowsPlayer, tierForPersona } from './npcTier'
+import { canMessageFirst, isDmAvailable, isFollowable, isViewableProfile, tierForPersona } from './npcTier'
 import type { NPC } from '../types'
 
 function makeNpc(overrides: Partial<NPC>): NPC {
@@ -67,20 +67,24 @@ describe('isViewableProfile / isFollowable', () => {
   })
 })
 
-describe('npcFollowsPlayer / isDmAvailable', () => {
-  it('a celeb with decent relationship follows the player, independent of followedByPlayer', () => {
-    const npc = makeNpc({ persona: 'teammate', relationship: 40, followedByPlayer: false })
-    expect(npcFollowsPlayer(npc)).toBe(true)
-    expect(isDmAvailable(npc)).toBe(true)
+describe('isDmAvailable / canMessageFirst', () => {
+  it('celebs and media can be DMed with no follow-back requirement, at any relationship', () => {
+    expect(isDmAvailable(makeNpc({ persona: 'celebrity', relationship: 0, followedByPlayer: false }))).toBe(true)
+    expect(isDmAvailable(makeNpc({ persona: 'teammate', relationship: -50 }))).toBe(true)
+    expect(isDmAvailable(makeNpc({ persona: 'tabloid' }))).toBe(true)
+    expect(isDmAvailable(makeNpc({ persona: 'match_reporter' }))).toBe(true)
   })
 
-  it('a celeb with low relationship does not follow the player yet', () => {
-    const npc = makeNpc({ persona: 'teammate', relationship: 5 })
-    expect(npcFollowsPlayer(npc)).toBe(false)
+  it('commenters can never be DMed', () => {
+    expect(isDmAvailable(makeNpc({ persona: 'loyal_fan', relationship: 100 }))).toBe(false)
+    expect(isDmAvailable(makeNpc({ persona: 'hater' }))).toBe(false)
+    expect(isDmAvailable(makeNpc({ persona: 'meme_account' }))).toBe(false)
   })
 
-  it('media/commenters never follow back or are DMable, regardless of relationship', () => {
-    expect(npcFollowsPlayer(makeNpc({ persona: 'tabloid', relationship: 100 }))).toBe(false)
-    expect(npcFollowsPlayer(makeNpc({ persona: 'loyal_fan', relationship: 100 }))).toBe(false)
+  it('only a celeb at 25%+ relationship may message first', () => {
+    expect(canMessageFirst(makeNpc({ persona: 'celebrity', relationship: 25 }))).toBe(true)
+    expect(canMessageFirst(makeNpc({ persona: 'celebrity', relationship: 24 }))).toBe(false)
+    expect(canMessageFirst(makeNpc({ persona: 'tabloid', relationship: 100 }))).toBe(false)
+    expect(canMessageFirst(makeNpc({ persona: 'loyal_fan', relationship: 100 }))).toBe(false)
   })
 })

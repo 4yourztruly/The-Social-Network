@@ -245,7 +245,7 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
           <p className="text-center text-2xl font-semibold leading-snug drop-shadow">{story.text}</p>
         </div>
 
-        <div className="flex flex-col gap-2 px-3 pb-4">
+        <div className="flex flex-col gap-2 px-3 pb-10">
           {authorId !== PLAYER_ID && isNPC(author) && isDmAvailable(author) && (
             <div className="flex items-center gap-2">
               <input

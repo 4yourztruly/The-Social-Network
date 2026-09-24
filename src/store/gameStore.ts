@@ -29,7 +29,7 @@ import {
   type OnboardingInput,
 } from '../content/seed'
 import { inferPersonaFromBio } from '../engine/personaInference'
-import { isDmAvailable, isFollowable, isViewableProfile, tierForPersona } from '../engine/npcTier'
+import { canMessageFirst, isDmAvailable, isFollowable, isViewableProfile, tierForPersona } from '../engine/npcTier'
 import { CAREER_PACKS } from '../content/careers'
 import type { NPCSeed } from '../content/careers/types'
 import { buildFallbackRoster } from '../content/rosterFallback'
@@ -62,7 +62,7 @@ import {
 } from '../engine/reactions/engine'
 import { scanKeywordTags } from '../engine/keywordTagger'
 import { funMarkerTags } from '../engine/funMarkers'
-import { generateDmReply, type DMSchedulePayload } from '../engine/dm'
+import { generateDmReply, openingDmText, type DMSchedulePayload } from '../engine/dm'
 import { buildUsernameIndex, extractMentionedIds } from '../engine/mentions'
 import { fillTemplate } from '../engine/templates/filler'
 import { pushRecentLine, selectLine } from '../engine/templates/select'
@@ -306,6 +306,39 @@ export const useGameStore = create<GameState>((set, get) => {
         postOrder: [...newItems.map((p) => p.id), ...state.postOrder],
       }
     })
+    celebOutreach()
+  }
+
+  // Celebs the player is getting along with (relationship in the green, 25%+)
+  // sometimes message first. At most a couple per day, never stacked on an
+  // unanswered message, and never someone who can't be DMed at all.
+  function celebOutreach() {
+    const state = get()
+    const playerName = (state.profiles[PLAYER_ID] as Profile).displayName
+    const rng = mulberry32(hashStringToSeed(`outreach_${state.gameDay}_${state.clock}`))
+    const eligible = Object.values(state.profiles)
+      .filter(isNPC)
+      .filter((n) => canMessageFirst(n) && isDmAvailable(n) && state.threads[n.id]?.messages.at(-1)?.from !== 'npc')
+    if (eligible.length === 0) return
+    const shuffled = [...eligible].sort(() => rng() - 0.5)
+    const now = Date.now()
+    const sends: { npc: NPC; text: string }[] = []
+    for (const npc of shuffled) {
+      if (sends.length >= 2) break
+      if (rng() < 0.4) sends.push({ npc, text: openingDmText(rng, npc, playerName) })
+    }
+    if (sends.length === 0) return
+    set((st) => {
+      const threads = { ...st.threads }
+      for (const { npc, text } of sends) {
+        const msg: DMMessage = { id: makeId('msg'), from: 'npc', text, at: now, origin: 'template' }
+        const existing = threads[npc.id]
+        threads[npc.id] = existing
+          ? { ...existing, messages: [...existing.messages, msg], unread: existing.unread + 1 }
+          : { id: npc.id, npcId: npc.id, messages: [msg], unread: 1 }
+      }
+      return { threads }
+    })
   }
 
   // Materializes an NPC's DM reply into its thread — shared by the
@@ -339,6 +372,10 @@ export const useGameStore = create<GameState>((set, get) => {
     set((state) => {
       const parent = state.posts[payload.parentPostId]
       if (!parent) return state
+      // Replying to someone's comment (not the post/story itself) @-mentions
+      // them, same as when the player replies.
+      const replyTarget = parent.kind === 'reply' ? state.profiles[parent.authorId] : undefined
+      if (replyTarget && !text.trim().startsWith('@')) text = `@${replyTarget.username} ${text}`
       const commenter = state.profiles[payload.npcId]
       const commentEngagement = estimateReplyEngagement(
         mulberry32(hashStringToSeed(`${commentPostId}_engagement`)),
