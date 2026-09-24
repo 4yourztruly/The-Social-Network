@@ -173,7 +173,11 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
   if (!author || !story) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex justify-center bg-black">
+    <div
+      className="fixed inset-0 z-[100] flex select-none justify-center bg-black"
+      style={{ WebkitTouchCallout: 'none' }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div
         className="relative flex h-full w-full max-w-xl flex-col text-white"
         style={{
@@ -220,21 +224,19 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
           <button
             aria-label="Previous"
             onPointerDown={handlePointerDown}
-            onPointerUp={() => {
-              handlePointerUp()
-              handleTapPrev()
-            }}
+            onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onClick={handleTapPrev}
             className="absolute inset-y-0 left-0 w-1/3"
           />
           <button
             aria-label="Next"
             onPointerDown={handlePointerDown}
-            onPointerUp={() => {
-              handlePointerUp()
-              handleTapNext()
-            }}
+            onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onClick={handleTapNext}
             className="absolute inset-y-0 right-0 w-1/3"
           />
           <p className="text-center text-2xl font-semibold leading-snug drop-shadow">{story.text}</p>

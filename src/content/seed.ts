@@ -8,7 +8,7 @@ import { pushRecentLine, selectLine, selectPlainLine } from '../engine/templates
 import { applyPersonalityVoice } from '../engine/voice'
 import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
 import { GENERIC_OFFTOPIC_POSTS, GENERIC_OFFTOPIC_REACTION_POOL } from './genericFiller'
-import { estimateEngagement, estimateReplyEngagement } from '../engine/formulas'
+import { estimateEngagement, estimateReplyEngagement, storyCommentCount } from '../engine/formulas'
 
 // Stand-in "social score" (see engine/formulas.estimateEngagement — normally
 // the player's humor+aura) used to size NPC-authored engagement numbers.
@@ -361,7 +361,7 @@ function seedStories(
       // Same idea as a top-level post's `replies` — a target count that
       // seedReplies materializes into actual comment Posts, so opening a
       // story's comments isn't always empty.
-      replies: randomInt(rng, 0, 8),
+      replies: storyCommentCount(rng, author.followers),
       origin: 'template',
     })
   }

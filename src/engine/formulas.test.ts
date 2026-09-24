@@ -6,6 +6,7 @@ import {
   estimateReplyEngagement,
   followerDeltaFromEngagement,
   statDeltasForTags,
+  storyCommentCount,
 } from './formulas'
 
 describe('estimateEngagement', () => {
@@ -97,5 +98,15 @@ describe('estimateReplyEngagement', () => {
     const small = estimateReplyEngagement(mulberry32(7), 100, 50)
     const big = estimateReplyEngagement(mulberry32(7), 5_000_000, 50)
     expect(big.likes).toBeGreaterThan(small.likes)
+  })
+})
+
+describe('storyCommentCount', () => {
+  it('always gives a story at least one comment, and celebs far more than small accounts', () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      expect(storyCommentCount(mulberry32(seed), 0)).toBeGreaterThanOrEqual(1)
+      expect(storyCommentCount(mulberry32(seed), 300_000_000)).toBeLessThanOrEqual(16)
+    }
+    expect(storyCommentCount(mulberry32(3), 50_000_000)).toBeGreaterThan(storyCommentCount(mulberry32(3), 500))
   })
 })

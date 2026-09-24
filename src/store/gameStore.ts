@@ -40,7 +40,7 @@ import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
 import { createGameEvent } from '../engine/events'
 import { applyPlayerEffects, lastStatChangesFromEffects, xpFromEffects } from '../engine/effects'
-import { estimateReplyEngagement, statDeltasForTags } from '../engine/formulas'
+import { estimateReplyEngagement, statDeltasForTags, storyCommentCount } from '../engine/formulas'
 import { splitDueItems } from '../engine/scheduler'
 import {
   runReactionEngine,
@@ -914,11 +914,15 @@ export const useGameStore = create<GameState>((set, get) => {
           expiresAt: now + STORY_TTL_MS,
           likes: 0,
           reposts: 0,
-          replies: 0,
+          replies: storyCommentCount(rng, npc.followers),
           origin: 'template',
         }
+        const npcRecord: Record<string, NPC> = {}
+        for (const p of Object.values(profiles)) if (isNPC(p)) npcRecord[p.id] = p
+        const storyComments = seedReplies(pack, rng, npcRecord, [story], state.player.club || pack.worldName)
         posts = { ...posts, [story.id]: story }
-        postOrder = [story.id, ...postOrder]
+        for (const c of storyComments) posts[c.id] = c
+        postOrder = [...storyComments.map((c) => c.id), story.id, ...postOrder]
       }
 
       return {
@@ -1619,13 +1623,35 @@ export const useGameStore = create<GameState>((set, get) => {
         posts[id] = post
       }
     }
+
+    // Live stories that never got any comments (older saves, or the old
+    // 0-8 roll landing on 0 even for a huge celeb) get a follower-scaled
+    // batch now, same generator as a fresh seed.
+    const now = Date.now()
+    const hasChildren = new Set(Object.values(save.posts).map((p) => p.parentId).filter(Boolean))
+    const commentless = Object.values(posts).filter(
+      (p) => p.kind === 'story' && p.authorId !== PLAYER_ID && (p.expiresAt ?? 0) > now && !hasChildren.has(p.id),
+    )
+    if (commentless.length > 0) {
+      const pack = CAREER_PACKS[save.player.career]
+      const npcRecord: Record<string, NPC> = {}
+      for (const p of Object.values(save.profiles)) if (isNPC(p)) npcRecord[p.id] = p
+      const rng = mulberry32(hashStringToSeed(`story_backfill_${save.clock}_${commentless.length}`))
+      const withCounts = commentless.map((s) => ({
+        ...s,
+        replies: storyCommentCount(rng, npcRecord[s.authorId]?.followers ?? 0),
+      }))
+      for (const s of withCounts) posts[s.id] = s
+      for (const c of seedReplies(pack, rng, npcRecord, withCounts, save.player.club || pack.worldName)) posts[c.id] = c
+    }
+
     set({
       clock: save.clock,
       gameDay: save.gameDay ?? 1,
       player: save.player,
       profiles: save.profiles,
       posts,
-      postOrder: Object.values(save.posts)
+      postOrder: Object.values(posts)
         .sort((a, b) => b.createdAt - a.createdAt)
         .map((p) => p.id),
       threads: save.threads,

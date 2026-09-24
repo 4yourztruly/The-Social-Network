@@ -69,6 +69,14 @@ export function commentCountForPost(rng: RNG, socialScore: number): number {
   return Math.min(15, randomInt(rng, 5, 11) + bonus)
 }
 
+// How many comments an NPC's story should have. Anyone gets a few; a
+// bigger following draws noticeably more (roughly a doubling per 10x
+// followers), capped so even the biggest celeb stays believable.
+export function storyCommentCount(rng: RNG, followers: number): number {
+  const reach = Math.round(Math.max(0, Math.log10(Math.max(10, followers)) - 2) * 2.2)
+  return Math.min(16, randomInt(rng, 1, 3) + reach)
+}
+
 // Stat deltas per canonical tag — summed across whatever tags the keyword
 // tagger actually found in the caption. A plain post with no detected tags
 // still gets a small baseline for the act of posting. Everything here only

@@ -79,3 +79,12 @@ a {
     font-size: 16px;
   }
 }
+
+/* `select-none` on a container (e.g. the story viewer, so press-and-hold
+   doesn't highlight text) must not stop people typing in the inputs
+   inside it — iOS Safari refuses to focus a user-select:none input. */
+.select-none input,
+.select-none textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
