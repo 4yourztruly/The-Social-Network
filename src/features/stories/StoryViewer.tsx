@@ -98,8 +98,11 @@ export function StoryViewer({ authorId, viewedAuthorIds, onMarkViewed, onChangeA
       setStoryIndex((i) => i + 1)
       return
     }
-    const nextAuthor = authorIds[authorPos + 1]
-    if (nextAuthor) onChangeAuthor(nextAuthor)
+    // Past this person's last story: jump to the next person whose story
+    // hasn't been watched yet (the current author is already marked viewed),
+    // and close once everyone's been seen.
+    const nextUnwatched = authorIds.find((id) => id !== authorId && !viewedAuthorIds.has(id))
+    if (nextUnwatched) onChangeAuthor(nextUnwatched)
     else onClose()
   }
 
