@@ -295,6 +295,10 @@ export function seedReplies(
   npcs: Record<string, NPC>,
   topLevelPosts: Post[],
   orgForFlavor: string,
+  // Comment texts to steer clear of — shared across every parent in the
+  // call (and seeded by callers with what other stories already have) so
+  // two stories don't end up with the same comment section.
+  avoidTexts: Set<string> = new Set(),
 ): Post[] {
   const now = Date.now()
   const npcList = Object.values(npcs)
@@ -345,15 +349,22 @@ export function seedReplies(
         // already used elsewhere in this thread, so two different
         // commenters don't land on the same canned line back to back.
         const recentLineIds = [...priorRecent, ...usedLineIdsThisThread]
-        const selection = selectLine(rng, linePool, [], recentLineIds)
-        recentLineIdsByNpc[commenter.id] = pushRecentLine(priorRecent, selection.lineId)
-        usedLineIdsThisThread.push(selection.lineId)
-        // Reaction lines are written as "reply to whoever's post this is" —
-        // {player} fills with the post's actual author, not the game's player.
-        const filled = fillTemplate(selection.line, { player: parentAuthor?.displayName ?? '', org: orgForFlavor })
-        text = applyPersonalityVoice(filled, commenter, rng)
+        let candidate = ''
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const selection = selectLine(rng, linePool, [], recentLineIds)
+          // Reaction lines are written as "reply to whoever's post this is" —
+          // {player} fills with the post's actual author, not the game's player.
+          const filled = fillTemplate(selection.line, { player: parentAuthor?.displayName ?? '', org: orgForFlavor })
+          candidate = applyPersonalityVoice(filled, commenter, rng)
+          recentLineIdsByNpc[commenter.id] = pushRecentLine(priorRecent, selection.lineId)
+          usedLineIdsThisThread.push(selection.lineId)
+          recentLineIds.push(selection.lineId)
+          if (!avoidTexts.has(candidate)) break
+        }
+        text = candidate
       }
 
+      avoidTexts.add(text)
       const createdAt = Math.min(now, parent.createdAt + randomInt(rng, 1, 120) * 60 * 1000)
       const replyEngagement = estimateReplyEngagement(rng, commenter.followers, NPC_SOCIAL_SCORE)
       const reply: Post = {

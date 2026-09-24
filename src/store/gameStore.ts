@@ -280,6 +280,13 @@ export const useGameStore = create<GameState>((set, get) => {
   // Deliberately NOT called when one merely starts (starting an activity,
   // triggering an event) — the day shouldn't tick over mid-action, only
   // once it's actually done. Not tied to real wall-clock time at all.
+  // Every comment already sitting under a story, so a new story's comment
+  // section doesn't repeat them.
+  function existingStoryCommentTexts(posts: Record<string, Post>): Set<string> {
+    const storyIds = new Set(Object.values(posts).filter((p) => p.kind === 'story').map((p) => p.id))
+    return new Set(Object.values(posts).filter((p) => p.parentId && storyIds.has(p.parentId)).map((p) => p.text))
+  }
+
   function advanceDay() {
     set((state) => {
       const pack = CAREER_PACKS[state.player.career]
@@ -710,7 +717,18 @@ export const useGameStore = create<GameState>((set, get) => {
         replies: 0,
         origin,
       }
-      set((st) => ({ posts: { ...st.posts, [story.id]: story }, postOrder: [story.id, ...st.postOrder] }))
+      // News breaks the day's stories first, so it goes at the bottom of
+      // the current day's posts (with the oldest timestamp), leaving
+      // everyone else above it to react.
+      set((st) => {
+        const today = st.postOrder.filter((id) => st.posts[id]?.kind === 'post' && st.posts[id]?.gameDay === story.gameDay)
+        const oldest = today.reduce((min, id) => Math.min(min, st.posts[id].createdAt), story.createdAt)
+        story.createdAt = oldest - 60_000
+        const lastToday = today.at(-1)
+        const at = lastToday ? st.postOrder.indexOf(lastToday) + 1 : 0
+        const postOrder = [...st.postOrder.slice(0, at), story.id, ...st.postOrder.slice(at)]
+        return { posts: { ...st.posts, [story.id]: story }, postOrder }
+      })
       scheduleGossipComments(story.id)
     }
 
@@ -1083,7 +1101,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }
         const npcRecord: Record<string, NPC> = {}
         for (const p of Object.values(profiles)) if (isNPC(p)) npcRecord[p.id] = p
-        const storyComments = seedReplies(pack, rng, npcRecord, [story], state.player.club || pack.worldName)
+        const storyComments = seedReplies(pack, rng, npcRecord, [story], state.player.club || pack.worldName, existingStoryCommentTexts(state.posts))
         posts = { ...posts, [story.id]: story }
         for (const c of storyComments) posts[c.id] = c
         postOrder = [...storyComments.map((c) => c.id), story.id, ...postOrder]
