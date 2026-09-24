@@ -37,9 +37,20 @@ export function StoriesRow({ viewedAuthorIds, onOpenStories, onAddStory }: Stori
         const author = profiles[authorId]
         if (!author) return null
         const viewed = viewedAuthorIds.has(authorId)
+        const isPlayer = authorId === PLAYER_ID
         return (
+          <div key={authorId} className="relative shrink-0">
+          {isPlayer && (
+            // Post as many stories as you like — the plus is always there.
+            <button
+              onClick={onAddStory}
+              aria-label="Add another story"
+              className="absolute right-1 top-9 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 ring-2 ring-white dark:ring-neutral-900"
+            >
+              <PlusIcon className="h-3 w-3 text-white" />
+            </button>
+          )}
           <button
-            key={authorId}
             onClick={() => onOpenStories(authorId)}
             className="flex shrink-0 flex-col items-center gap-1"
           >
@@ -58,6 +69,7 @@ export function StoriesRow({ viewedAuthorIds, onOpenStories, onAddStory }: Stori
               {authorId === PLAYER_ID ? 'You' : (isNPC(author) ? shortNameFor(author.displayName) : author.displayName)}
             </span>
           </button>
+          </div>
         )
       })}
     </div>

@@ -89,7 +89,7 @@ export function buildBatchCommentSystemPrompt(args: BatchCommentArgs): string {
     'The accounts:',
     ...cards.map((c) => `- ${c}`),
     gossip ? `Recent things ${args.playerDisplayName} has done (only bring up if it fits, never forced):\n${gossip}` : '',
-    'Each comment: ONE short casual sentence, max 200 characters. React to the specific text in the request — no vague filler. Different requests must not sound alike.',
+    'Each comment: ONE short casual sentence, max 200 characters. It MUST pick up a concrete detail of the text it answers (a name, a project, a place, what was actually said) — never generic praise or filler like "love this", "so true", "can\'t wait". Different requests must not sound alike.',
     'When a request says it is a reply to someone or to comment #N, answer that comment directly (read what you wrote for #N) like a real reply in a thread — agree, argue, joke back. Do not start with the @handle, that gets added for you.',
     'When a request carries a news item, the comment MUST clearly refer to it: name the people and what happened.',
     'Output ONLY a JSON array, no fences, no prose: [{"id": "1", "text": "..."}, ...] with exactly one entry per request id.',
@@ -157,6 +157,9 @@ export async function generateAiCommentBatch(args: BatchCommentArgs): Promise<Ma
 
 export interface DailyPostsArgs {
   authors: NPC[]
+  // Optional per-post context (same order as authors) — what prompted this
+  // post, e.g. a public thing the player just did.
+  hints?: (string | undefined)[]
   worldName: string
   config: AIProviderConfig
 }
@@ -175,7 +178,8 @@ export function buildDailyPostsSystemPrompt(args: DailyPostsArgs): string {
     'The accounts:',
     ...cards.map((c) => `- ${c}`),
     'Each numbered request is ONE standalone post by that account, in their own authentic voice — about their own life, work, mood or something on their mind (a news outlet posts a headline). Not a reply, not about the player. If an account appears more than once, the posts must be about different things.',
-    'Each post: 1 short casual sentence, max 200 characters. An emoji or hashtag only if it fits them.',
+    'Every post must be about something CONCRETE and specific — a named project, place, person, opinion or event (use the facts in their memory). Never vague filler such as "busy week, more soon", "big things coming", "grateful for everything". The one exception: if their memory says they are keeping something private, they may post a coy hint about it without revealing it.',
+    'Each post: 1 short casual sentence, max 200 characters. An emoji or hashtag only if it fits them. If a request has a context note, the post must respond to it (and @-mention the player if the note says to).',
     'Output ONLY a JSON array, no fences, no prose: [{"id": "1", "text": "..."}, ...] with exactly one entry per request id.',
     'Stay in character; never mention being an AI. No slurs, no explicit content, no real private information.',
   ].join('\n')
@@ -183,7 +187,9 @@ export function buildDailyPostsSystemPrompt(args: DailyPostsArgs): string {
 
 export async function generateAiDailyPosts(args: DailyPostsArgs): Promise<Map<number, string> | null> {
   if (args.authors.length === 0) return null
-  const user = args.authors.map((a, i) => `${i + 1}. @${a.username}`).join('\n')
+  const user = args.authors
+    .map((a, i) => `${i + 1}. @${a.username}${args.hints?.[i] ? ` — context: ${args.hints[i]}` : ''}`)
+    .join('\n')
   const raw = await completeJson(
     buildDailyPostsSystemPrompt(args),
     user,

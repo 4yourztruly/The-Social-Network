@@ -43,6 +43,7 @@ import { resolvePublicity } from '../engine/publicity'
 import type { WorldStory } from '../types'
 import { fetchWikipediaFacts } from '../engine/wikiFacts'
 import { registerMemorySource } from '../engine/npcMemory'
+import { acknowledgementPost, secretPost, specificCelebPost } from '../engine/specificContent'
 import { makeId } from '../engine/id'
 import { hashStringToSeed, mulberry32, pick, randomInt } from '../engine/rng'
 import { createGameEvent } from '../engine/events'
@@ -447,7 +448,9 @@ export const useGameStore = create<GameState>((set, get) => {
     set((st) => {
       const posts = { ...st.posts }
       for (const r of replies) posts[r.id] = r
-      for (const wc of withCounts) if (posts[wc.id]) posts[wc.id] = { ...posts[wc.id], replies: wc.replies }
+      const added = new Map<string, number>()
+      for (const r of replies) if (r.parentId) added.set(r.parentId, (added.get(r.parentId) ?? 0) + 1)
+      for (const [pid, n] of added) if (posts[pid]) posts[pid] = { ...posts[pid], replies: posts[pid].replies + n }
       return { posts, postOrder: [...replies.map((r) => r.id), ...st.postOrder] }
     })
   }
@@ -475,12 +478,15 @@ export const useGameStore = create<GameState>((set, get) => {
       })
       if (texts) recordSpend(config.id)
     }
-    const finalPosts = hold.posts.map((p, i) => {
+    const finalPosts = hold.posts
+      .map((p, i) => {
       // The "public @-ing the player" post keeps its own text.
       const keep = !!playerUsername && p.text.includes(`@${playerUsername}`)
       const aiText = keep ? undefined : texts?.get(i)
       return { ...p, gameDay: hold.day, replies: 0, ...(aiText ? { text: aiText, origin: 'ai' as const } : {}) }
     })
+      // A celeb with nothing specific to say (and no AI to say it) just doesn't post.
+      .filter((p) => p.text.trim().length > 0)
     set((st) => {
       const posts = { ...st.posts }
       for (const p of finalPosts) posts[p.id] = p
@@ -488,6 +494,85 @@ export const useGameStore = create<GameState>((set, get) => {
     })
     const ok = await aiPopulateComments(finalPosts, (p) => hold.replyCounts[p.id] ?? 8)
     if (!ok) addTemplateReplies(finalPosts, hold.replyCounts)
+    else fillThinThreads(finalPosts, 6)
+  }
+
+  // No post is left with a near-empty comment section: anything under `min`
+  // (a partly failed AI batch, a skipped parent) is topped up.
+  function fillThinThreads(parents: Post[], min: number, target: (p: Post) => number = () => min) {
+    const children = new Map<string, number>()
+    for (const p of Object.values(get().posts)) if (p.parentId) children.set(p.parentId, (children.get(p.parentId) ?? 0) + 1)
+    const thin = parents.filter((p) => (children.get(p.id) ?? 0) < min)
+    if (thin.length === 0) return
+    addTemplateReplies(
+      thin,
+      Object.fromEntries(thin.map((p) => [p.id, Math.max(min - (children.get(p.id) ?? 0), target(p) - (children.get(p.id) ?? 0))])),
+    )
+  }
+
+  // A celeb answers the player publicly — their own post @-ing them, not just
+  // a reply — when the player did something public that warrants it (defended
+  // them, tagged them, shared a public moment with them). Or, when the two are
+  // keeping something quiet, a coy hint with no names. See engine/specificContent.
+  function celebResponds(args: {
+    kind: 'reply' | 'activity' | 'event' | 'post' | 'story'
+    npcIds: string[]
+    detail: string
+    chance: number
+    secret?: boolean
+  }) {
+    const state = get()
+    const player = state.profiles[PLAYER_ID] as Profile
+    const rng = mulberry32(hashStringToSeed(`respond_${args.kind}_${Date.now()}_${args.detail}`))
+    const candidates = args.npcIds
+      .map((id) => state.profiles[id])
+      .filter((n): n is NPC => !!n && isNPC(n))
+      .filter((n) => tierForPersona(n.persona) === 'celeb' && n.relationship > -20)
+    if (candidates.length === 0 || rng() > args.chance) return
+    const npc = pick(rng, candidates)
+    const shortDetail = args.detail.length > 60 ? `${args.detail.slice(0, 60)}…` : args.detail
+    const fallback = args.secret ? secretPost(rng) : acknowledgementPost(rng, args.kind, player.username, shortDetail)
+    const hint = args.secret
+      ? `You and ${player.displayName} privately did this: "${shortDetail}". You are keeping it quiet — post a coy, vague hint (no names, no details) that only hints something happened.`
+      : `${player.displayName} (@${player.username}) just did this publicly: "${shortDetail}". Post publicly acknowledging it and @-mention @${player.username}.`
+
+    const publish = (text: string, origin: Post['origin']) => {
+      const engagement = estimateEngagement(rng, npc.followers, NPC_SOCIAL_SCORE, [])
+      const post: Post = {
+        id: makeId('post'),
+        authorId: npc.id,
+        kind: 'post',
+        text,
+        tags: [],
+        createdAt: Date.now(),
+        gameDay: get().gameDay,
+        likes: engagement.likes,
+        reposts: engagement.reposts,
+        replies: 0,
+        origin,
+      }
+      set((st) => ({ posts: { ...st.posts, [post.id]: post }, postOrder: [post.id, ...st.postOrder] }))
+      const count = randomInt(rng, 6, 10)
+      void aiPopulateComments([post], () => count).then((ok) => {
+        if (!ok) addTemplateReplies([post], { [post.id]: count })
+        else fillThinThreads([post], 5)
+      })
+    }
+
+    const config = aiConfigNow()
+    if (!config) {
+      publish(fallback, 'template')
+      return
+    }
+    void generateAiDailyPosts({
+      authors: [npc],
+      hints: [hint],
+      worldName: CAREER_PACKS[state.player.career].worldName,
+      config,
+    }).then((texts) => {
+      if (texts) recordSpend(config.id)
+      publish(texts?.get(0) ?? fallback, texts?.get(0) ? 'ai' : 'template')
+    })
   }
 
   function advanceDay() {
@@ -505,7 +590,7 @@ export const useGameStore = create<GameState>((set, get) => {
       // is going on: the last thing you did was an event, or it made news.
       const busy =
         (state.activityLog.at(-1)?.eventId ? 1 : 0) + ((state.lastOutcomeReport?.details?.signals.length ?? 0) > 0 ? 1 : 0)
-      const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor, state.profiles[PLAYER_ID]?.username, 1 + busy)
+      const dailyPosts = seedDailyPosts(pack, rng, npcs, DAILY_POST_COUNT, orgForFlavor, state.profiles[PLAYER_ID]?.username, 1 + busy, Math.max(2, 1 + busy), state.worldStories, aiOn)
       const nextGameDay = state.gameDay + 1
       if (aiOn) {
         // No canned posts/comments in AI mode — finishAiDay adds the AI's.
@@ -1251,6 +1336,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!encounter) return
     const encounterId = encounter.id
     const encounterText = encounter.text
+    const encounterCelebId = encounter.celebId
 
     const rng = mulberry32(hashStringToSeed(`${encounterId}_resolve_${choice.id}_${Date.now()}`))
     const tier = rollTier(rng, choice.risk)
@@ -1331,6 +1417,8 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       set((s) => ({ activityLog: [...s.activityLog, logEntry], lastOutcomeReport: report }))
       advanceDay()
+
+      if (eventIsPublic && encounterCelebId) celebResponds({ kind: 'event', npcIds: [encounterCelebId], detail: encounterText, chance: 0.5 })
 
       // Only public moments make the news.
       if (eventIsPublic)
@@ -1492,10 +1580,13 @@ export const useGameStore = create<GameState>((set, get) => {
 
     if (aiEligible && config) {
       const all = Object.values(get().posts)
-      const feed = get().postOrder.map((id) => get().posts[id]).filter((p) => p?.kind === 'post').slice(0, 4)
-      const stories = all.filter((p) => p.kind === 'story' && p.authorId !== PLAYER_ID).slice(0, 6)
-      void aiPopulateComments([...feed, ...stories], (p) => Math.min(p.kind === 'story' ? 6 : 12, strippedCounts[p.id] ?? 6)).then((ok) => {
-        if (!ok) addTemplateReplies(all.filter((p) => p.kind !== 'reply'), strippedCounts)
+      const topLevel = all.filter((p) => p.kind !== 'reply')
+      const feed = get().postOrder.map((id) => get().posts[id]).filter((p) => p?.kind === 'post').slice(0, 8)
+      const stories = all.filter((p) => p.kind === 'story' && p.authorId !== PLAYER_ID).slice(0, 5)
+      void aiPopulateComments([...feed, ...stories], (p) => Math.min(p.kind === 'story' ? 5 : 10, strippedCounts[p.id] ?? 6)).then((ok) => {
+        if (!ok) addTemplateReplies(topLevel, strippedCounts)
+        // everything the AI didn't cover (older posts, other stories) still gets a real section
+        else fillThinThreads(topLevel, 4, (p) => strippedCounts[p.id] ?? 5)
       })
     }
   },
@@ -1605,9 +1696,16 @@ export const useGameStore = create<GameState>((set, get) => {
         isViewableProfile(npc) && persona !== 'tabloid' && persona !== 'insider' ? pack.seedPostPool[persona] : undefined
       let posts = state.posts
       let postOrder = state.postOrder
-      if (lines && lines.length > 0) {
-        const line = pick(rng, lines)
-        const text = fillTemplate(line, { org: state.player.club || pack.worldName, org_upper: (state.player.club || pack.worldName).toUpperCase() })
+      const celebNames: Record<string, string> = {}
+      for (const p of Object.values(profiles)) celebNames[p.id] = p.displayName
+      const storyText =
+        tierForPersona(persona) === 'celeb'
+          ? specificCelebPost(rng, npc, state.worldStories, celebNames)
+          : lines && lines.length > 0
+            ? fillTemplate(pick(rng, lines), { org: state.player.club || pack.worldName, org_upper: (state.player.club || pack.worldName).toUpperCase() })
+            : null
+      if (storyText) {
+        const text = storyText
         const story: Post = {
           id: makeId('post'),
           authorId: id,
@@ -1789,6 +1887,12 @@ export const useGameStore = create<GameState>((set, get) => {
       npcDelta: 1,
       scale: 0.5,
     })
+
+    // Sticking up for someone in public is the kind of thing they answer in a post of their own.
+    if (target && isNPC(target)) {
+      const defending = /defend|support|proud|leave (him|her|them)|got your back|standing with|love you|deserve|hate on/i.test(trimmed)
+      celebResponds({ kind: 'reply', npcIds: [target.id], detail: trimmed, chance: defending ? 0.7 : 0.15 })
+    }
   },
 
   submitPlayerStory: (caption) => {
@@ -1826,6 +1930,19 @@ export const useGameStore = create<GameState>((set, get) => {
       scale: 0.7,
       followerBonus: true,
     })
+
+    // People react to your story too — sized by how big you are.
+    const posted = Object.values(get().posts).find((p) => p.kind === 'story' && p.authorId === PLAYER_ID && p.createdAt === now)
+    if (posted) {
+      const count = storyCommentCount(mulberry32(hashStringToSeed(`${posted.id}_crowd`)), (get().profiles[PLAYER_ID] as Profile).followers)
+      if (aiConfigNow()) {
+        void aiPopulateComments([posted], () => count).then((ok) => {
+          if (!ok) addTemplateReplies([posted], { [posted.id]: count })
+        })
+      } else {
+        addTemplateReplies([posted], { [posted.id]: count })
+      }
+    }
   },
 
   submitPlayerPost: ({ caption }) => {
@@ -1872,6 +1989,7 @@ export const useGameStore = create<GameState>((set, get) => {
       orgName: state.player.club || pack.worldName,
       playerDisplayName: playerProfile.displayName,
       playerUsername: playerProfile.username,
+      postText: text,
       playerFollowers: playerProfile.followers,
       playerSocialScore: (state.player.humor + state.player.aura) / 2,
       rng,
@@ -2010,6 +2128,8 @@ export const useGameStore = create<GameState>((set, get) => {
     // still used for DMs' deliberate typing delay).
     processComments(commentItems)
     advanceDay()
+
+    celebResponds({ kind: 'post', npcIds: [...mentionedIds], detail: text, chance: 0.5 })
 
     // The tabloids pick up on most posts — always the newsworthy ones (a
     // detected tag), and more often than not the rest.
@@ -2315,6 +2435,10 @@ export const useGameStore = create<GameState>((set, get) => {
       lastOutcomeReport: report,
     })
     advanceDay()
+
+    const romantic = activity.tags.includes('relationship') || /date|romantic|dinner for two|kiss|flirt/i.test(activity.description)
+    if (activityIsPublic) celebResponds({ kind: 'activity', npcIds: participants.map((p) => p.id), detail: activity.description, chance: 0.5 })
+    else if (romantic) celebResponds({ kind: 'activity', npcIds: participants.map((p) => p.id), detail: activity.description, chance: 0.4, secret: true })
 
     // Public scenes make the news and people comment on them; private ones don't.
     if (activityIsPublic)

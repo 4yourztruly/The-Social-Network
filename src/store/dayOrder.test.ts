@@ -59,3 +59,49 @@ describe('feed volume', () => {
     expect(withComments.length).toBeGreaterThan(0)
   })
 })
+
+describe('specific feed, stories and public responses', () => {
+  it('celebs stay within the same daily allowance as the news outlets', async () => {
+    await useGameStore.getState().completeOnboarding({
+      career: 'footballer', displayName: 'Test', username: 'test', bio: 'Forward.', role: '', org: '',
+      celebs: [{ name: 'A One' }, { name: 'B Two' }, { name: 'C Three' }, { name: 'D Four' }],
+    })
+    const before = new Set(Object.keys(useGameStore.getState().posts))
+    useGameStore.getState().submitPlayerPost({ caption: 'plain day' })
+    const s = useGameStore.getState()
+    const fresh = Object.values(s.posts).filter((p) => !before.has(p.id) && p.kind === 'post' && p.authorId !== 'player')
+    const celebPosts = fresh.filter((p) => {
+      const a = s.profiles[p.authorId]
+      return a && isNPC(a) && a.persona === 'celebrity'
+    })
+    expect(celebPosts.length).toBeLessThanOrEqual(3)
+  })
+
+  it('a story gets comments from people too', async () => {
+    await useGameStore.getState().completeOnboarding({
+      career: 'footballer', displayName: 'Test', username: 'test', bio: 'Forward.', role: '', org: '', celebs: [{ name: 'Zendaya' }],
+    })
+    useGameStore.getState().submitPlayerStory('training day')
+    const s = useGameStore.getState()
+    const story = Object.values(s.posts).find((p) => p.kind === 'story' && p.authorId === 'player')!
+    expect(Object.values(s.posts).filter((p) => p.parentId === story.id).length).toBeGreaterThan(0)
+  })
+
+  it('defending a celeb publicly can get a post of their own @-ing you', async () => {
+    await useGameStore.getState().completeOnboarding({
+      career: 'footballer', displayName: 'Test', username: 'test', bio: 'Forward.', role: '', org: '', celebs: [{ name: 'Zendaya' }],
+    })
+    const s0 = useGameStore.getState()
+    const celeb = Object.values(s0.profiles).filter(isNPC).find((n) => n.persona === 'celebrity')!
+    const theirPost = Object.values(s0.posts).find((p) => p.kind === 'post' && p.authorId === celeb.id)
+    const target = theirPost ?? Object.values(s0.posts).find((p) => p.kind === 'post' && p.authorId !== 'player')!
+    let answered = false
+    for (let i = 0; i < 30 && !answered; i++) {
+      useGameStore.getState().addPlayerReply(target.id, 'I will always defend you, ignore the haters')
+      answered = Object.values(useGameStore.getState().posts).some(
+        (p) => p.kind === 'post' && p.authorId === target.authorId && p.text.includes('@test'),
+      )
+    }
+    if (isNPC(s0.profiles[target.authorId]) && (s0.profiles[target.authorId] as { persona: string }).persona === 'celebrity') expect(answered).toBe(true)
+  })
+})

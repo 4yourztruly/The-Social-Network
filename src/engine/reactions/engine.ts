@@ -14,6 +14,7 @@ import { commentCountForPost, estimateEngagement, followerDeltaFromEngagement, s
 import type { Engagement } from '../formulas'
 import { CROSS_MENTION_BANTER_LINES, PLAYER_MENTION_BANTER_LINES, fillBanterTarget } from '../banter'
 import { GENERIC_OFFTOPIC_REACTION_POOL } from '../../content/genericFiller'
+import { relatedComment } from '../specificContent'
 
 // An offTopic NPC (a real celeb the AI picked for variety, unrelated to
 // this career's world) never draws from this pack's sport/industry-flavored
@@ -75,6 +76,8 @@ export interface ReactionEngineArgs {
   orgName: string
   playerDisplayName: string
   playerUsername: string
+  // What the player actually wrote — lets some comments answer it directly.
+  postText?: string
   playerFollowers: number
   playerSocialScore: number // (humor + aura) / 2 — see formulas.estimateEngagement
   rng: RNG
@@ -133,6 +136,7 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
     orgName,
     playerDisplayName,
     playerUsername,
+    postText,
     playerFollowers,
     playerSocialScore,
     rng,
@@ -157,7 +161,11 @@ export function runReactionEngine(args: ReactionEngineArgs): ReactionOutcome {
     npcLineUpdates[npc.id] = pushRecentLine(recentLineIds, selection.lineId)
 
     const filled = fillTemplate(selection.line, { player: playerDisplayName, org: orgName })
-    const text = applyPersonalityVoice(filled, npc, rng)
+    let text = applyPersonalityVoice(filled, npc, rng)
+    if (postText && rng() < 0.45) {
+      const related = relatedComment(rng, postText, playerDisplayName, npc.persona)
+      if (related) text = applyPersonalityVoice(related, npc, rng)
+    }
     const dueAt = now + randomInt(rng, COMMENT_DELAY_RANGE_MS[0], COMMENT_DELAY_RANGE_MS[1])
 
     scheduledItems.push({

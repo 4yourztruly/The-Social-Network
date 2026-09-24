@@ -1,4 +1,4 @@
-import type { CareerType, NPC, PlayerState, Post, Profile, RelationshipVibe, Settings, WorldSettings } from '../types'
+import type { CareerType, NPC, PlayerState, Post, Profile, RelationshipVibe, Settings, WorldSettings, WorldStory } from '../types'
 import type { CareerPack, NPCSeed } from './careers/types'
 import { fillTemplate } from '../engine/templates/filler'
 import { mulberry32, pick, randomInt, type RNG } from '../engine/rng'
@@ -6,6 +6,7 @@ import { makeId } from '../engine/id'
 import { isViewableProfile, tierForPersona } from '../engine/npcTier'
 import { pushRecentLine, selectLine, selectPlainLine } from '../engine/templates/select'
 import { applyPersonalityVoice } from '../engine/voice'
+import { relatedComment, specificCelebPost } from '../engine/specificContent'
 import { CROSS_MENTION_BANTER_LINES, fillBanterTarget } from '../engine/banter'
 import { GENERIC_OFFTOPIC_POSTS, GENERIC_OFFTOPIC_REACTION_POOL } from './genericFiller'
 import { estimateEngagement, estimateReplyEngagement, storyCommentCount } from '../engine/formulas'
@@ -40,16 +41,59 @@ function isFeedPoster(npc: NPC): boolean {
   return isGenericPoster(npc) && tierForPersona(npc.persona) !== 'commenter'
 }
 
-// News outlets are two accounts among many — left alone they'd flood the feed.
-// Past `cap` posts, another author takes the slot.
-function pickCappedAuthor(rng: RNG, all: NPC[], mediaUsed: { n: number }, cap: number): NPC {
-  let author = pick(rng, all)
-  if (tierForPersona(author.persona) === 'media' && mediaUsed.n >= cap) {
-    const others = all.filter((n) => tierForPersona(n.persona) !== 'media')
-    if (others.length > 0) author = pick(rng, others)
-  }
-  if (tierForPersona(author.persona) === 'media') mediaUsed.n++
+// Celebs and the news outlets each get a small daily allowance — left alone
+// they'd flood the feed — and a celeb posts at most once a day.
+interface AuthorBudget {
+  media: number
+  celeb: number
+  seen: Set<string>
+  mediaCap: number
+  celebCap: number
+}
+
+function newBudget(mediaCap: number, celebCap: number): AuthorBudget {
+  return { media: 0, celeb: 0, seen: new Set(), mediaCap, celebCap }
+}
+
+function pickFeedAuthor(rng: RNG, all: NPC[], budget: AuthorBudget): NPC | null {
+  const allowed = all.filter((n) => {
+    if (budget.seen.has(n.id)) return false
+    const tier = tierForPersona(n.persona)
+    if (tier === 'media') return budget.media < budget.mediaCap
+    return budget.celeb < budget.celebCap
+  })
+  if (allowed.length === 0) return null
+  const author = pick(rng, allowed)
+  budget.seen.add(author.id)
+  if (tierForPersona(author.persona) === 'media') budget.media++
+  else budget.celeb++
   return author
+}
+
+// The text of a feed post: a celeb only posts about something specific (a
+// work of theirs, a story doing the rounds); a news outlet posts from the
+// pack's headline lines. Returns null when there's nothing worth saying —
+// blank string in AI mode, where the AI writes it instead.
+function feedPostText(
+  pack: CareerPack,
+  rng: RNG,
+  author: NPC,
+  npcs: Record<string, NPC>,
+  orgForFlavor: string,
+  stories: readonly WorldStory[],
+  aiMode: boolean,
+): string | null {
+  if (tierForPersona(author.persona) === 'celeb') {
+    const names: Record<string, string> = {}
+    for (const n of Object.values(npcs)) names[n.id] = n.displayName
+    const text = specificCelebPost(rng, author, stories, names)
+    return text ?? (aiMode ? '' : null)
+  }
+  const lines = postPoolFor(pack, author)
+  if (!lines || lines.length === 0) return null
+  const selection = selectPlainLine(rng, lines, author.recentLineIds)
+  author.recentLineIds = pushRecentLine(author.recentLineIds, selection.lineId)
+  return fillTemplate(selection.line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
 }
 
 const MENTION_POST_LINES = [
@@ -210,17 +254,14 @@ function seedPosts(
   // like everyone else.
   const npcList = Object.values(npcs).filter(isFeedPoster)
   const posts: Post[] = []
-  const mediaUsed = { n: 0 }
+  // The opening feed spans a few days: a handful of news posts and one post
+  // per celeb, not dozens.
+  const budget = newBudget(3, 8)
   for (let i = 0; i < count && npcList.length > 0; i++) {
-    const author = pickCappedAuthor(rng, npcList, mediaUsed, 3)
-    const lines = postPoolFor(pack, author)
-    if (!lines || lines.length === 0) continue
-    // Anti-repetition, same as replies/live comments — without this the
-    // same handful of authors (small line pools) visibly repeated
-    // themselves across the ~45-post opening feed.
-    const selection = selectPlainLine(rng, lines, author.recentLineIds)
-    author.recentLineIds = pushRecentLine(author.recentLineIds, selection.lineId)
-    const text = fillTemplate(selection.line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
+    const author = pickFeedAuthor(rng, npcList, budget)
+    if (!author) break
+    const text = feedPostText(pack, rng, author, npcs, orgForFlavor, [], false)
+    if (!text) continue
     const ageMs = randomInt(rng, 5, 60 * 24) * 60 * 1000 // 5 min to 60 hours ago
     const engagement = estimateEngagement(rng, author.followers, NPC_SOCIAL_SCORE, [])
     posts.push({
@@ -252,18 +293,23 @@ export function seedDailyPosts(
   // How many of the day's posts may come from the news outlets. Usually 1;
   // more only when a lot is going on (see gameStore.advanceDay).
   mediaCap = 1,
+  // Celebs get the same allowance as the news outlets (at least 2) — more only
+  // when there's a reason, i.e. a busy day.
+  celebCap = Math.max(2, mediaCap),
+  worldStories: readonly WorldStory[] = [],
+  // AI mode leaves a celeb's text blank when there's no canned specific line —
+  // the AI writes it (and the post is dropped if it doesn't).
+  aiMode = false,
 ): Post[] {
   const now = Date.now()
   const npcList = Object.values(npcs).filter(isFeedPoster)
   const posts: Post[] = []
-  const mediaUsed = { n: 0 }
+  const budget = newBudget(mediaCap, celebCap)
   for (let i = 0; i < count && npcList.length > 0; i++) {
-    const author = pickCappedAuthor(rng, npcList, mediaUsed, mediaCap)
-    const lines = postPoolFor(pack, author)
-    if (!lines || lines.length === 0) continue
-    const selection = selectPlainLine(rng, lines, author.recentLineIds)
-    author.recentLineIds = pushRecentLine(author.recentLineIds, selection.lineId)
-    const text = fillTemplate(selection.line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
+    const author = pickFeedAuthor(rng, npcList, budget)
+    if (!author) break
+    const text = feedPostText(pack, rng, author, npcs, orgForFlavor, worldStories, aiMode)
+    if (text === null) continue
     // News outlets usually break the day's stories first, so they land at
     // the bottom of the day's batch and everyone else can react above them.
     const newsFirst = tierForPersona(author.persona) === 'media' && rng() < 0.85
@@ -325,6 +371,8 @@ export function seedReplies(
   for (const parent of topLevelPosts) {
     if (parent.replies <= 0) continue
     const parentAuthor = npcs[parent.authorId]
+    // The player isn't in the NPC record, but their posts/stories get comments too.
+    const parentName = parentAuthor?.displayName ?? (parent.authorId === 'player' ? 'you' : '')
     const candidates = npcList.filter((n) => n.id !== parent.authorId && isGenericPoster(n))
     if (candidates.length === 0) continue
 
@@ -360,6 +408,12 @@ export function seedReplies(
         text = applyPersonalityVoice(fillBanterTarget(line, targetNpc.username), commenter, rng)
         mentionsLeft -= 1
       } else {
+        // Most comments answer what the post is actually about.
+        const related = rng() < 0.8 ? relatedComment(rng, parent.text, parentName, commenter.persona) : null
+        const relatedText = related ? applyPersonalityVoice(related, commenter, rng) : null
+        if (relatedText && !avoidTexts.has(relatedText)) {
+          text = relatedText
+        } else {
         const linePool = reactionPoolFor(pack, commenter)
         if (!linePool) continue
         // Merges this NPC's own anti-repetition history with every line
@@ -371,7 +425,7 @@ export function seedReplies(
           const selection = selectLine(rng, linePool, [], recentLineIds)
           // Reaction lines are written as "reply to whoever's post this is" —
           // {player} fills with the post's actual author, not the game's player.
-          const filled = fillTemplate(selection.line, { player: parentAuthor?.displayName ?? '', org: orgForFlavor })
+          const filled = fillTemplate(selection.line, { player: parentName, org: orgForFlavor })
           candidate = applyPersonalityVoice(filled, commenter, rng)
           recentLineIdsByNpc[commenter.id] = pushRecentLine(priorRecent, selection.lineId)
           usedLineIdsThisThread.push(selection.lineId)
@@ -379,6 +433,7 @@ export function seedReplies(
           if (!avoidTexts.has(candidate)) break
         }
         text = candidate
+        }
       }
 
       avoidTexts.add(text)
@@ -424,11 +479,18 @@ function seedStories(
   for (let i = 0; i < count * 3 && chosen.size < count && chosen.size < npcList.length; i++) {
     const author = pick(rng, npcList)
     if (chosen.has(author.id)) continue
-    const lines = postPoolFor(pack, author)
-    if (!lines || lines.length === 0) continue
+    let text: string | null
+    if (tierForPersona(author.persona) === 'celeb') {
+      // A celeb's story is about something specific, or there isn't one.
+      const names: Record<string, string> = {}
+      for (const n of Object.values(npcs)) names[n.id] = n.displayName
+      text = specificCelebPost(rng, author, [], names)
+    } else {
+      const lines = postPoolFor(pack, author)
+      text = lines && lines.length > 0 ? fillTemplate(pick(rng, lines), { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() }) : null
+    }
+    if (!text) continue
     chosen.add(author.id)
-    const line = pick(rng, lines)
-    const text = fillTemplate(line, { org: orgForFlavor, org_upper: orgForFlavor.toUpperCase() })
     const ageMs = randomInt(rng, 5, 12 * 60) * 60 * 1000 // 5 min to 12h ago
     const createdAt = now - ageMs
     stories.push({
